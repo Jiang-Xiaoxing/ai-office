@@ -1,5 +1,5 @@
-' AI åŠå…¬å®¤å¯åŠ¨è„šæœ¬ â€”â€” éšè—çª—å£åå°è¿è¡Œï¼Œç»ä¸å¼¹ç»ˆç«¯
-' å¯åŠ¨: åŒå‡»æ­¤æ–‡ä»¶ æˆ– wscript.exe start.vbs
+' AI °ì¹«ÊÒÆô¶¯½Å±¾ ¡ª¡ª Òş²Ø´°¿ÚºóÌ¨ÔËĞĞ£¬¾ø²»µ¯ÖÕ¶Ë
+' Æô¶¯: Ë«»÷´ËÎÄ¼ş »ò wscript.exe start.vbs
 Option Explicit
 Dim sh, fso, BASE, PY, SCRIPT, LOG, URL, i
 Set sh = CreateObject("WScript.Shell")
@@ -10,24 +10,24 @@ SCRIPT = BASE & "\server_app.py"
 LOG = BASE & "\server.log"
 URL = "http://127.0.0.1:8889/api/healthz"
 
-' å¦‚æœå·²åœ¨è·‘å°±ä¸é‡å¤å¯åŠ¨
+' Èç¹ûÒÑÔÚÅÜ¾Í²»ÖØ¸´Æô¶¯
 If Ready(URL) Then
-  WScript.Echo "AI åŠå…¬å®¤å·²åœ¨è¿è¡Œ"
+  WScript.Echo "AI °ì¹«ÊÒÒÑÔÚÔËĞĞ"
   WScript.Quit 0
 End If
 
-' éšè—çª—å£å¯åŠ¨
+' Òş²Ø´°¿ÚÆô¶¯
 sh.Run "cmd /c start """" /b """ & PY & """ """ & SCRIPT & """ >> """ & LOG & """ 2>&1", 0, False
 
-' ç­‰å¾…åç«¯å°±ç»ª
+' µÈ´ıºó¶Ë¾ÍĞ÷
 For i = 1 To 30
   WScript.Sleep 1000
   If Ready(URL) Then
-    WScript.Echo "AI åŠå…¬å®¤å·²å¯åŠ¨: http://127.0.0.1:8889/"
+    WScript.Echo "AI °ì¹«ÊÒÒÑÆô¶¯: http://127.0.0.1:8889/"
     WScript.Quit 0
   End If
 Next
-WScript.Echo "AI åŠå…¬å®¤å¯åŠ¨å¤±è´¥ï¼Œè¯·æŸ¥çœ‹ " & LOG
+WScript.Echo "AI °ì¹«ÊÒÆô¶¯Ê§°Ü£¬Çë²é¿´ " & LOG
 WScript.Quit 1
 
 Function Ready(url)

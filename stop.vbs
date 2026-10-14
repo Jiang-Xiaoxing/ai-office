@@ -1,18 +1,27 @@
-' AI åŠå…¬å®¤å…³é—­è„šæœ¬ â€”â€” åœæ‰ pythonw.exe è¿›ç¨‹(åªåœæœ¬é¡¹ç›® venv çš„)
+' AI °ì¹«ÊÒ¹Ø±Õ½Å±¾ ¡ª¡ª Í£µô pythonw.exe ½ø³Ì(Ö»Í£±¾ÏîÄ¿ venv µÄ)
 Option Explicit
-Dim sh, fso, BASE
+Dim sh, fso, BASE, wmi, procs, p
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 BASE = fso.GetParentFolderName(WScript.ScriptFullName)
 
-' ç”¨ wmic æŸ¥ pythonw.exe çš„å‘½ä»¤è¡Œæ˜¯å¦åŒ…å« ai-office\server_app.py
-Dim cmd, out
-cmd = "wmic process where ""name='pythonw.exe' and CommandLine like '%%ai-office%%server_app.py%%'"" get ProcessId /value"
-out = sh.Exec("cmd /c " & cmd).StdOut.ReadAll()
+' ÓÃ WMI Ö±½Ó²é pythonw.exe ½ø³Ì£¬¼ì²éÃüÁîĞĞÊÇ·ñ°üº¬ ai-office\server_app.py
+Set wmi = GetObject("winmgmts:\\.\root\cimv2")
+Set procs = wmi.ExecQuery("SELECT * FROM Win32_Process WHERE Name='pythonw.exe'")
 
-If InStr(out, "ProcessId=") > 0 Then
-  sh.Run "taskkill /F /FI ""PID eq " & Trim(Replace(out, "ProcessId=", "")) & """", 0, True
-  WScript.Echo "AI åŠå…¬å®¤å·²åœæ­¢"
+Dim found, pid
+found = False
+For Each p In procs
+  If InStr(1, p.CommandLine, "ai-office", 1) > 0 And InStr(1, p.CommandLine, "server_app.py", 1) > 0 Then
+    pid = p.ProcessId
+    found = True
+    Exit For
+  End If
+Next
+
+If found Then
+  sh.Run "taskkill /F /PID " & pid, 0, True
+  WScript.Echo "AI °ì¹«ÊÒÒÑÍ£Ö¹"
 Else
-  WScript.Echo "AI åŠå…¬å®¤æœªåœ¨è¿è¡Œ"
+  WScript.Echo "AI °ì¹«ÊÒÎ´ÔÚÔËĞĞ"
 End If
