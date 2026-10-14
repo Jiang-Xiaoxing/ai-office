@@ -1,0 +1,14 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Logs
+server.log
+*.log
+
+# Temp
+*.pid
+*.tmp
+wb-out.txt
+wb.pid

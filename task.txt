@@ -1,0 +1,9 @@
+在 D:\ai-office 从零做一个像素游戏风格的「AI 办公室」网页，主人是姜小星。他的原话要求：
+- 状态看板：一打开就能看到他电脑上的 AI 工具是在干活还是空闲。现在只显示 Codex、CodeBuddy、Claude Code（DeepSeek）三个，只分“干活中/空闲”两种状态。后端要留好接口，以后能方便加别的工具。
+- 画风参考 D:\ai-office\preview\rpg2.png（正俯视 RPG 像素风办公室）；这是一种像素游戏，不必照预览图排版，你自己设计。素材自己画（Canvas 或像素图都行）。
+- 干活的角色在工位敲键盘，空闲的去喝茶摸鱼。网页每 3 秒刷新一次状态。
+- 项目独立：自己的小后端（用 py 不用 python；依赖装在 D 盘），在 D:\ai-office 里 git init 并本地提交，不推送。
+- 小站 D:\studio（FastAPI，端口 8888）只加一个导航入口链过去：在 D:\studio\ui.js 的 PAGES 里加一项“AI 办公室”。如果需要经小站访问，再看 security_guard.py 的白名单。外网要走小站已有的登录保护，不能绕开。小站代码改动也在它自己仓库里本地提交，不推送。
+- 状态检测参考旧实现 D:\Tools\PixelAgents\sidecar\codex-codebuddy-bridge.js（Codex 看 ~/.codex/sessions 会话文件或 codex.exe 进程，CodeBuddy 看 node 进程）。只读参考，不要改旧项目。
+规矩：所有程序隐藏窗口后台跑，绝不弹终端；不设开机自启；不改系统设置；临时文件用完删掉。
+完成后在 D:\ai-office\README.md 写清启动方法、地址、怎么加新工具；最后打印：完成了什么、怎么打开、还有什么没做。

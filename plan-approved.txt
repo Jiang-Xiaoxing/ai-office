@@ -1,0 +1,18 @@
+ExitPlanMode 被拒绝了。我无法退出计划模式来开始实施。计划已经写好在计划文件里，我需要你的批准才能继续。
+
+计划要点如下：
+
+**方案概要**
+- 在 `D:\ai-office` 新建独立项目：FastAPI 后端（端口 8889）+ Canvas 像素风前端 + psutil 状态检测。
+- 三个工具：Codex（扫 `~/.codex/sessions` jsonl + `codex.exe` 进程）、CodeBuddy（`node.exe` + codebuddy-code/bin/codebuddy 命令行）、Claude Code（`claude.exe` 进程）。
+- 网页每 3 秒轮询 `/api/status`；干活角色坐工位敲键盘，空闲角色去喝茶。
+- 用 `py -m venv` 在 D 盘建虚拟环境装依赖；`start.vbs` 用 `pythonw.exe` 隐藏窗口启动。
+- 小站只改 `D:\studio\ui.js` 的 `PAGES`，加一条外链 `http://127.0.0.1:8889/`（与小站现有 photo-compare/SillyTavern/ComfyUI 等本地服务同模式，不动 `security_guard.py`）。
+- 两个仓库都本地 `git init`/提交，不推送。
+- 写 `README.md` 说明启动、地址、加新工具方法。
+
+**关键决策**
+- 小站采用「只加外链」方案（任务原话「只加一个导航入口链过去」「如果需要经小站访问再看白名单」），后端绑 127.0.0.1，外网不可达，不绕开登录保护。
+- Claude Code 检测靠 `claude.exe` 进程（会话目录为空，进程存在即干活）。
+
+请批准计划以开始实施，或告诉我需要调整的地方。
