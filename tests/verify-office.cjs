@@ -1,3 +1,4 @@
+const {BASE,PYTHON}=require('./test-env.cjs');
 ﻿/* Hidden browser acceptance tests; mock state stays inside the browser context. */
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -10,13 +11,13 @@ const read=p=>p.evaluate(()=>window.officeDebug.snapshot());
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const ids=['codex','openrouter','claude-code'];
 const names=['Codex','Claude Code (OpenRouter)','Claude Code (DeepSeek)'];
-const providerScenarios=JSON.parse(execFileSync(path.join(ROOT,'venv/Scripts/python.exe'),
+const providerScenarios=JSON.parse(execFileSync(PYTHON,
   [path.join(__dirname,'provider_scenarios.py')],{cwd:ROOT,windowsHide:true,encoding:'utf8'}));
 const settled=(s,work)=>s.actors.every(a=>a.requested===(work?'working':'idle')&&!a.route.length&&
   (work?a.mode==='type':['sleep','tea','read'].includes(a.mode)));
 async function arrive(page,work) {
   await page.waitForFunction(work=>{
-    const s=window.officeDebug?.snapshot();return s?.actors.every(a=>a.requested===(work?'working':'idle')&&!a.route.length&&
+    const s=window.officeDebug?.snapshot();return s?.connected&&s.actors.length===3&&s.actors.every(a=>a.requested===(work?'working':'idle')&&!a.route.length&&
       (work?a.mode==='type':['sleep','tea','read'].includes(a.mode)));
   },work,{timeout:22000});
 }
@@ -120,7 +121,7 @@ async function watchTravel(page,work) {
     const response=await route.fetch({url:u.href});await route.fulfill({response});
   });
   try {
-    await page.goto('http://127.0.0.1:8889/',{waitUntil:'networkidle'});await arrive(page,false);
+    await page.goto(`${BASE}/`,{waitUntil:'networkidle'});await arrive(page,false);
     await checkFit(page);let s=await read(page);assert.equal(s.zoom,4);
     assert.equal(s.width,480);assert.equal(s.height,270);assert.equal(s.sample,1);
     assert.equal(s.background,'static/assets/attic-bg-2.png');
@@ -190,12 +191,12 @@ async function watchTravel(page,work) {
       console.log(`PASS ${size.width}x${size.height}: fit, labels, all three idle/work destinations`);
     }
     mode='working';const startup=await context.newPage();
-    await startup.goto('http://127.0.0.1:8889/');
+    await startup.goto(`${BASE}/`);
     await startup.waitForFunction(()=>window.officeDebug?.snapshot().actors.every(a=>a.requested==='working'));
     assert((await read(startup)).actors.some(a=>a.mode==='walk'));await arrive(startup,true);await startup.close();
     console.log('PASS first load with working status walks to work');
     mode='idle';await page.setViewportSize({width:1920,height:1080});
-    await page.goto('http://127.0.0.1:8889/office/',{waitUntil:'networkidle'});await arrive(page,false);
+    await page.goto(`${BASE}/office/`,{waitUntil:'networkidle'});await arrive(page,false);
     for(const suffix of ['static/weather.js','static/office.js','static/office.css','static/assets/attic-bg-2.png','static/assets/office-atlas.png','static/assets/office-atlas.json','static/assets/residents.json','api/status'])
       assert(resources.some(r=>r.url.endsWith(`/office/${suffix}`)&&r.status===200),`prefix resource: ${suffix}`);
     assert(calls.some(c=>c.url.endsWith('/office/api/status')));await checkFit(page);

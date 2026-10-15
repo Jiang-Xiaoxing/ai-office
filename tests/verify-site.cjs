@@ -1,4 +1,4 @@
-/* Read-only check through the running private site's existing authenticated proxy.
+/* Read-only check through the configured authenticated proxy (private site by default).
  * OFFICE_SITE_AUTH is passed in memory by the local operator, never saved here.
  */
 const assert=require('node:assert/strict');
@@ -15,17 +15,17 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'D:/tools/PixelAgents/no
     const page=await context.newPage(),resources=[],errors=[];
     page.on('response',r=>resources.push({path:new URL(r.url()).pathname,status:r.status()}));
     page.on('pageerror',e=>errors.push(e.message));
-    const response=await page.goto('http://127.0.0.1:8888/office/',{waitUntil:'networkidle'});
+    const response=await page.goto((process.env.OFFICE_SITE_URL||'http://127.0.0.1:8888/office/'),{waitUntil:'networkidle'});
     assert.equal(response.status(),200);await page.waitForFunction(()=>window.officeDebug?.snapshot().connected);
-    for(const suffix of ['static/weather.js','static/office.js','static/office.css','static/assets/attic-bg-2.png','static/assets/office-atlas.png','static/assets/office-atlas.json','api/status'])
+    for(const suffix of ['static/weather.js','static/interaction.js','static/office.js','static/office.css','static/assets/attic-bg-2.png','static/assets/office-atlas.png','static/assets/office-atlas.json','api/status'])
       assert(resources.some(r=>r.path===`/office/${suffix}`&&r.status===200),suffix);
     assert.deepEqual(errors,[]);
     assert.equal((await page.evaluate(()=>window.officeDebug.snapshot())).zoom,4);
     await page.reload({waitUntil:'networkidle'});await page.waitForFunction(()=>window.officeDebug?.snapshot().connected);
-    console.log('PASS actual authenticated /office/ proxy: page, reload, CSS, JS, sprites, live status');
+    console.log('PASS authenticated /office/ proxy: page, reload, CSS, JS, sprites, live status');
     await context.close();
     const anonymous=await browser.newContext();
-    const denied=await anonymous.request.get('http://127.0.0.1:8888/office/');
-    assert.equal(denied.status(),404);console.log('PASS existing private-site authentication remains effective');
+    const denied=await anonymous.request.get((process.env.OFFICE_SITE_URL||'http://127.0.0.1:8888/office/'));
+    assert.equal(denied.status(),404);console.log('PASS configured gateway rejects anonymous requests');
   } finally {await browser.close();}
 })().catch(e=>{console.error(e.message);process.exitCode=1;});

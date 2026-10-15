@@ -17,7 +17,7 @@
   const actors = [];
   let tools = [], residents = [], overflowNotice = '';
   const ROOM = { w: 480, h: 270 };
-  let atlas, background, metadata, scene, weather, layout, initialized = false, lastTime = 0, clock = 0;
+  let atlas, background, metadata, scene, weather, interaction, layout, initialized = false, lastTime = 0, clock = 0;
   let latest = null, polls = 0, connected = false, polling = false;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const rect = (x, y, w, h, color, c = ctx) => {
@@ -298,6 +298,7 @@
       }
     }}));
     drawables.sort((a,b)=>a.depth-b.depth).forEach(d=>d.draw());
+    interaction.update(now);interaction.draw(ctx,now,reduced.matches);
     updateLabels();requestAnimationFrame(render);
   }
   function createLabels() {
@@ -356,7 +357,7 @@
     snapshot:()=>({ready:initialized,connected,polls,clock,zoom:layout?.zoom,width:layout?.w,height:layout?.h,
       sample:layout?.sample,pixelScale:layout?.pixelScale,ox:layout?.ox,oy:layout?.oy,
       background:background?.getAttribute('src'),smoothing:ctx.imageSmoothingEnabled,
-      weather:weather?.snapshot(),capacity:CAPACITY,tools:tools.map(t=>({...t})),
+      weather:weather?.snapshot(),interactions:interaction?.snapshot(),capacity:CAPACITY,tools:tools.map(t=>({...t})),
       actors:actors.map(a=>({id:a.id,name:a.name,sprite:a.sprite,slot:a.slot,x:a.x,y:a.y,mode:a.mode,frame:a.frame,dir:a.dir,requested:a.requested,
         idleSlot:a.idleSlot,idleChanges:a.idleChanges,route:a.route.map(p=>({...p})),
         target:initialized?destination(a):null,walkable:initialized?walkable(a.x,a.y):false,
@@ -373,6 +374,7 @@
       const json=url=>fetch(url).then(r=>{if(!r.ok)throw new Error(`Missing ${url}`);return r.json();});
       const [,,data,looks]=await Promise.all([image.decode(),room.decode(),json('static/assets/office-atlas.json'),json('static/assets/residents.json')]);
       atlas=image;background=room;metadata=data;residents=looks;fit();
+      interaction=AtticInteractions.create({canvas,getActors:()=>actors,getLayout:()=>layout,isConnected:()=>connected});
       await poll();updateRoster();document.getElementById('loading').hidden=true;
       requestAnimationFrame(render);setInterval(poll,3000);new ResizeObserver(fit).observe(wrap);
       document.addEventListener('visibilitychange',()=>{lastTime=0;if(!document.hidden){weather.update();poll();}});

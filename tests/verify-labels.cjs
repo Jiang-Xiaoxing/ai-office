@@ -1,3 +1,4 @@
+const {BASE}=require('./test-env.cjs');
 ﻿/* Regression for readable labels when two residents share a nook. */
 const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'D:/tools/PixelAgents/node_modules/playwright');
@@ -19,6 +20,7 @@ async function labelsFit(page) {
   });
 }
 async function capture(page,name) {
+  assert.equal(await page.locator('.nameplate').count(),3,'capture must include every resident label');
   const masks=await page.locator('.nameplate,#bar,#footer').evaluateAll(els=>els.map(el=>{
     const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
   }));
@@ -34,13 +36,15 @@ async function capture(page,name) {
       {json:{ts:Math.floor(Date.now()/1000),agents:['codex','openrouter','claude-code'].map((id,i)=>({id,
         name:['Codex','Claude Code (OpenRouter)','Claude Code (DeepSeek)'][i],status:mode}))}}));
     await context.addInitScript(()=>{Math.random=()=>.01;Date.now=()=>Date.parse('2026-10-15T01:00:00Z');});
-    const page=await context.newPage();await page.goto('http://127.0.0.1:8889/');
+    const page=await context.newPage();await page.goto(`${BASE}/`);
     await page.waitForFunction(()=>{
       const s=window.officeDebug?.snapshot();
       return s?.connected&&s.actors.length===3&&s.actors.every(a=>['sleep','tea','read'].includes(a.mode));
     });
     await labelsFit(page);await capture(page,'attic-idle');
-    mode='working';await page.waitForFunction(()=>window.officeDebug.snapshot().actors.every(a=>a.mode==='type'),null,{timeout:22000});
+    mode='working';await page.waitForFunction(()=>{
+      const s=window.officeDebug.snapshot();return s.connected&&s.actors.length===3&&s.actors.every(a=>a.mode==='type');
+    },null,{timeout:22000});
     await labelsFit(page);await capture(page,'attic-work');
     console.log('PASS final desktop idle/work screenshots from latest code');
     failing=true;await page.waitForFunction(()=>!window.officeDebug.snapshot().connected);
@@ -48,7 +52,7 @@ async function capture(page,name) {
     assert(notice.y+notice.height<footer.y,'reconnection notice stays above the footer');
     failing=false;
     await page.close();mode='idle';
-    const mobile=await context.newPage();await mobile.setViewportSize({width:390,height:844});await mobile.goto('http://127.0.0.1:8889/');
+    const mobile=await context.newPage();await mobile.setViewportSize({width:390,height:844});await mobile.goto(`${BASE}/`);
     await mobile.waitForFunction(()=>window.officeDebug?.snapshot().actors.filter(a=>a.mode==='sleep').length>=2,null,{timeout:30000});
     await labelsFit(mobile);await mobile.screenshot({path:path.join(TMP,'mobile-crowded.png')});
     console.log('PASS deterministic mobile crowding: two sleeping residents, readable nonoverlapping labels');

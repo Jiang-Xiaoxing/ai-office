@@ -1,3 +1,4 @@
+const {BASE}=require('./test-env.cjs');
 /* Test time exists only in this browser context; production has no weather override. */
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'D:/tools/PixelAgents/node_modules/playwright');
@@ -45,12 +46,12 @@ function inPane(x,y,polygons) {
       const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
       const t=Date.parse(iso);
       await page.addInitScript(t=>{globalThis.__weatherTestTime=t;Date.now=()=>globalThis.__weatherTestTime;Math.random=()=>.01;},t);
-      await page.goto('http://127.0.0.1:8889/');
+      await page.goto(`${BASE}/`);
       await page.waitForFunction(()=>window.officeDebug?.snapshot().connected);
       let state=await read(page);
       assert.equal(state.weather.kind,kind);assert.equal(state.weather.weights[kind],1,'correct immediately, without initial fade');
       assert.equal(await page.locator('#weather').textContent(),state.weather.name);
-      assert.equal(await page.locator('button,select,input').count(),0,'no manual switch');
+      assert.equal(await page.locator('select,input,[data-weather-control],button[id*="weather"]').count(),0,'no manual weather switch');
       await page.reload();await page.waitForFunction(()=>window.officeDebug?.snapshot().connected);
       assert.equal((await read(page)).weather.kind,kind,'reload preserves the same hourly weather');
       await page.waitForFunction(()=>officeDebug.snapshot().actors.every(a=>['sleep','tea','read'].includes(a.mode)));
@@ -101,7 +102,7 @@ function inPane(x,y,polygons) {
       await page.close();
     }
     assert.deepEqual(errors,[]);await context.close();
-    const live=await browser.newPage();await live.goto('http://127.0.0.1:8889/');
+    const live=await browser.newPage();await live.goto(`${BASE}/`);
     await live.waitForFunction(()=>window.officeDebug?.snapshot().connected);
     const actual=await live.evaluate(()=>({state:officeDebug.snapshot().weather,expected:AtticWeather.weatherAt(Date.now())}));
     assert.equal(actual.state.kind,actual.expected.kind);await live.close();
