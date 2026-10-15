@@ -34,12 +34,15 @@
       { seat: { x: 96, y: 118 }, screen: { x: 84, y: 66, w: 23, h: 13 } },
       { seat: { x: 384, y: 118 }, screen: { x: 372, y: 66, w: 23, h: 13 } },
       { seat: { x: 406, y: 237 }, screen: { x: 394, y: 184, w: 23, h: 13 } },
-      ...[176, 260, 344].map(x => ({ seat: { x, y: 179 },
-        screen: { x: x - 12, y: 127, w: 23, h: 13 },
-        furniture: { x: x - 38, y: 124, w: 78, h: 63 },
-        block: { x: x - 38, y: 138, w: 77, h: 27 } })),
+      // Back wall, then the two front-edge bays flanking (not blocking) stairs.
+      ...[{ x: 222, y: 63 }, { x: 147, y: 185 }, { x: 301, y: 185 }].map(p => ({
+        seat: { x: p.x + 31, y: p.y + 55 },
+        screen: { x: p.x + 22, y: p.y + 3, w: 18, h: 13 },
+        furniture: { ...p, w: 64, h: 63 }, sprite: 'desk-wall',
+        block: { x: p.x, y: p.y + 14, w: 63, h: 27 } })),
     ];
     const desks = actors.map(a => ({ ...slots[a.slot], id: a.id, slot: a.slot }));
+    const occupied = slot => desks.some(d => d.slot === slot);
     return {
       ...ROOM,
       desks,
@@ -50,12 +53,15 @@
         { x: 368, y: 180, w: 77, h: 61 }, // original desks and chairs
         { x: 13, y: 151, w: 20, h: 54 }, // floor lamp
         { x: 30, y: 173, w: 80, h: 70 }, { x: 114, y: 183, w: 31, h: 45 },
-        { x: 197, y: 207, w: 97, h: 47 }, // stairs and flanking plants
+        { x: 215, y: 207, w: 53, h: 47 }, // stairs stay clear all the way to the opening
+        ...(!occupied(4) ? [{ x: 194, y: 210, w: 21, h: 37 }] : []),
+        ...(!occupied(5) ? [{ x: 272, y: 207, w: 27, h: 40 }] : []),
         { x: 430, y: 74, w: 37, h: 65 }, { x: 177, y: 52, w: 42, h: 42 },
         { x: 90, y: 17, w: 66, h: 37 }, { x: 326, y: 19, w: 62, h: 35 },
         { x: 228, y: 20, w: 24, h: 23 }, // pendant and windows
         { x: 27, y: 76, w: 29, h: 36 }, { x: 445, y: 181, w: 24, h: 49 },
-        { x: 221, y: 40, w: 53, h: 52 }, // rear plant nook
+        { x: 289, y: 59, w: 20, h: 20 }, // rear hanging picture
+        ...(!occupied(3) ? [{ x: 221, y: 40, w: 56, h: 56 }] : []),
         ...desks.filter(d => d.furniture).map(d => d.furniture),
       ],
       blocks: [
@@ -66,18 +72,18 @@
         { x: 30, y: 174, w: 80, h: 17 },
         { x: 55, y: 211, w: 32, h: 20 },
         { x: 13, y: 158, w: 16, h: 47 },
-        { x: 197, y: 230, w: 17, h: 15 },
+        ...(!occupied(4) ? [{ x: 197, y: 230, w: 17, h: 15 }] : []),
         { x: 217, y: 219, w: 49, h: 35 },
-        { x: 274, y: 230, w: 20, h: 15 },
+        ...(!occupied(5) ? [{ x: 274, y: 230, w: 20, h: 15 }] : []),
         { x: 446, y: 207, w: 20, h: 22 },
         ...desks.filter(d => d.block).map(d => d.block),
       ],
       spots: [
         { x: 62, y: 208, action: 'sleep' }, { x: 94, y: 202, action: 'sleep' },
-        { x: 92, y: 242, action: 'tea' }, { x: 174, y: 225, action: 'tea' },
-        { x: 132, y: 215, action: 'read' }, { x: 310, y: 225, action: 'read' },
-        { x: 310, y: 244, action: 'read' }, { x: 350, y: 225, action: 'tea' },
-        { x: 42, y: 148, action: 'tea' },
+        { x: 92, y: 242, action: 'tea' }, { x: 174, y: 168, action: 'tea' },
+        { x: 132, y: 215, action: 'read' }, { x: 310, y: 168, action: 'read' },
+        { x: 218, y: 168, action: 'read' }, { x: 350, y: 168, action: 'tea' },
+        { x: 70, y: 151, action: 'tea' },
       ],
     };
   }
@@ -86,9 +92,12 @@
     const c=scene.getContext('2d');c.imageSmoothingEnabled=false;
     // The supplied PNG is an exact 4x nearest-neighbor enlargement of this grid.
     c.drawImage(background,0,0,ROOM.w,ROOM.h);
+    if(layout.desks.some(d=>d.slot===3))sprite('clear-rear-plants',220,43,c);
+    if(layout.desks.some(d=>d.slot===4))sprite('clear-stair-plant',194,210,c);
+    if(layout.desks.some(d=>d.slot===5))sprite('clear-right-plant',270,207,c);
     for(const d of layout.desks)if(d.furniture) {
       sprite('chair',d.seat.x-13,d.seat.y-19,c);
-      sprite('desk',d.furniture.x,d.furniture.y,c);
+      sprite(d.sprite,d.furniture.x,d.furniture.y,c);
     }
     weather=AtticWeather.create(scene);
   }

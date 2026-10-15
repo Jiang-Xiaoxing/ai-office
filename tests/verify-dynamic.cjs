@@ -47,7 +47,7 @@ async function check(page,count) {
     const fixed=s.protected.filter(q=>!s.stations.some(d=>d.furniture&&d.furniture.x===q.x&&d.furniture.y===q.y));
     const hits=[];
     for(const d of s.stations.filter(d=>d.furniture))for(const [name,x,y] of [
-      ['desk',d.furniture.x,d.furniture.y],['chair',d.seat.x-13,d.seat.y-19]]) {
+      [d.sprite,d.furniture.x,d.furniture.y],['chair',d.seat.x-13,d.seat.y-19]]) {
       const [sx,sy,w,h]=meta[name];
       for(let dy=0;dy<h;dy++)for(let dx=0;dx<w;dx++)if(pixels[((sy+dy)*canvas.width+sx+dx)*4+3]&&
         fixed.some(q=>x+dx>=q.x&&x+dx<q.x+q.w&&y+dy>=q.y&&y+dy<q.y+q.h))hits.push([d.slot,name,x+dx,y+dy]);
@@ -55,6 +55,32 @@ async function check(page,count) {
     return hits;
   });
   assert.deepEqual(collisions,[],'visible furniture preserves lounge, lamps, stairs, windows and shelves');
+  // Protect the actual requested circulation area, rather than merely accepting
+  // any arrangement whose furniture does not touch the existing furnishings.
+  const corridor={x:145,y:127,w:222,h:57};
+  for(const d of s.stations.filter(d=>d.furniture)) {
+    assert(!overlaps(d.furniture,corridor),'added desks leave the middle floor empty');
+    const chair={x:d.seat.x-13,y:d.seat.y-19,w:26,h:27};
+    assert(!overlaps(chair,corridor),'added chairs stay outside the middle floor');
+    assert(d.furniture.y<=64||d.furniture.y+d.furniture.h>=248,'added station touches a back/front wall bay');
+    assert(Object.values(d.seat).every(Number.isInteger));
+    bodies.forEach((b,i)=>{
+      if(s.actors[i].slot!==d.slot)assert(!overlaps(b,{x:d.furniture.x*4,y:d.furniture.y*4,
+        w:d.furniture.w*4,h:d.furniture.h*4}),'people do not intersect another station');
+    });
+  }
+  const free=(x,y)=>x>=22&&x<=458&&y>=110&&y<=248&&
+    !s.obstacles.some(b=>x>b.x-5&&x<b.x+b.w+5&&y>b.y-3&&y<b.y+b.h+4);
+  for(let y=128;y<=180;y+=4)for(let x=148;x<=364;x+=4)
+    assert(free(x,y),'the central floor remains walkable with every station occupied');
+  // Flood-fill from immediately above the stairs to every seat and rest point.
+  const queue=[{x:240,y:200}],seen=new Set(['240,200']);
+  for(let i=0;i<queue.length;i++)for(const [dx,dy] of [[4,0],[-4,0],[0,4],[0,-4]]) {
+    const p={x:queue[i].x+dx,y:queue[i].y+dy},key=`${p.x},${p.y}`;
+    if(free(p.x,p.y)&&!seen.has(key)){seen.add(key);queue.push(p);}
+  }
+  for(const p of [...s.stations.map(d=>d.seat),...s.spots])
+    assert(queue.some(q=>Math.abs(q.x-p.x)<=2&&Math.abs(q.y-p.y)<=2),'stairs connect to every seat and leisure point');
   for(const q of s.protected)for(const b of boxes.slice(0,count))
     assert(!overlaps(b,{x:q.x*4,y:q.y*4,w:q.w*4,h:q.h*4}),'labels preserve background furniture, lamps, windows and stairs');
   const atlas=JSON.parse(fs.readFileSync(path.join(ROOT,'static/assets/office-atlas.json'),'utf8'));
@@ -86,7 +112,7 @@ async function capture(page,name) {
       const s=await check(page,live),api=await page.request.get('http://127.0.0.1:8889/api/status').then(r=>r.json());
       assert.deepEqual(s.tools.map(t=>t.id),configured.map(t=>t.id));
       assert.deepEqual(api.agents.map(t=>t.id),configured.map(t=>t.id));
-      if(live===6)for(const a of s.actors.slice(3))assert(a.monitorOn&&a.requested==='working','real explorer detector drives typing');
+      if(live===6)for(const a of s.actors)assert(a.monitorOn&&a.requested==='working','all six real test-config detectors drive typing');
       await capture(page,live===6?'attic-six':'attic-work');
       fs.writeFileSync(path.join(TMP,`live-${live}.json`),JSON.stringify(s,null,2));
       console.log(`PASS live restarted config: ${live} residents, matching labels/footer, nonoverlapping 1920x1080 4x screenshot`);

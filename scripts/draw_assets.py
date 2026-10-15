@@ -138,6 +138,20 @@ def attic_furniture():
          (104,117),(104,121),(100,121),(100,118),(90,118),
          (90,121),(85,121),(85,117),(83,115),(83,102),(85,102)],
     ], (0, 20, 25, 26))
+    # A narrower version of the same wood/monitor art fits the wall bays. Keep
+    # chairs and residents at their original size; all output remains native pixels.
+    sprites['desk-wall'] = sprites['desk'].resize((64, 48), Image.Resampling.NEAREST)
+
+    # Only the plant nooks needed by the new seats are cleared. These patches
+    # use clean wall/floor pixels at the same height, leaving the source PNG intact.
+    rear = native.crop((220, 43, 280, 96))
+    for y in range(53):
+        for x in range(60):
+            source_x = 281 + x % 15 if y < 17 else 312 + x % 30
+            rear.putpixel((x, y), native.getpixel((source_x, y + 43)))
+    sprites['clear-rear-plants'] = rear
+    sprites['clear-stair-plant'] = native.crop((156, 210, 176, 247))
+    sprites['clear-right-plant'] = native.crop((156, 207, 186, 247))
 
 PALETTES = [
     dict(id='moss',hair='#394352',highlight='#637080',shirt='#81aa9a',shade='#4d7d78',skin='#e9bd94',shadow='#bd886c',style='glasses'),
