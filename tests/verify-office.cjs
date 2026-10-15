@@ -26,6 +26,35 @@ async function checkFit(page) {
   const plates=await page.locator('.nameplate').evaluateAll(els=>els.map(e=>{const b=e.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};}));
   for(const p of plates)assert(p.x>=0&&p.y>=room.y&&p.x+p.w<=room.width&&p.y+p.h<=room.y+room.height,'nameplate fits');
   plates.forEach((p,i)=>plates.slice(i+1).forEach(q=>assert(!(p.x<q.x+q.w&&p.x+p.w>q.x&&p.y<q.y+q.h&&p.y+p.h>q.y),'nameplates must not overlap')));
+  for(const a of s.actors) {
+    const q={x:box.x+(Math.round(a.x)-13)*s.pixelScale,y:box.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,
+      w:26*s.pixelScale,h:36*s.pixelScale};
+    for(const p of plates)assert(!(p.x<q.x+q.w&&p.x+p.w>q.x&&p.y<q.y+q.h&&p.y+p.h>q.y),'nameplates must not cover a resident');
+  }
+  if(page.viewportSize().width===1920) {
+    const fonts=await page.locator('.nameplate strong,.nameplate small,.nameplate span').evaluateAll(els=>els.map(e=>parseFloat(getComputedStyle(e).fontSize)));
+    assert(fonts.every(size=>size>=16),`readable name/subtitle/status: ${fonts}`);
+  }
+}
+async function checkBackground(page) {
+  const result=await page.evaluate(async()=>{
+    const s=window.officeDebug.snapshot(),game=document.getElementById('game');
+    const image=new Image();image.src=s.background;await image.decode();
+    const ref=document.createElement('canvas');ref.width=480;ref.height=270;
+    const c=ref.getContext('2d');c.imageSmoothingEnabled=false;c.drawImage(image,0,0,480,270);
+    const expected=c.getImageData(0,0,480,270).data,actual=game.getContext('2d').getImageData(0,0,480,270).data;
+    const overlays=s.actors.map(a=>({x:Math.round(a.x)-19,y:Math.round(a.y)-(a.mode==='type'?46:40),w:38,h:48}));
+    overlays.push(...s.stations.map(d=>d.screen));
+    let checked=0,bad=0;
+    for(let y=0;y<270;y++)for(let x=0;x<480;x++) {
+      if(overlays.some(b=>x>=b.x&&x<b.x+b.w&&y>=b.y&&y<b.y+b.h))continue;
+      checked++;const i=(y*480+x)*4;
+      if(expected[i]!==actual[i]||expected[i+1]!==actual[i+1]||expected[i+2]!==actual[i+2])bad++;
+    }
+    return {checked,bad};
+  });
+  assert(result.checked>120000,`background coverage: ${result.checked}`);
+  assert.equal(result.bad,0,'approved background stays pixel-identical outside residents and existing screens');
 }
 async function watchTravel(page,work) {
   let previous=await read(page),prevTime=Date.now(),moving=0;
@@ -62,6 +91,11 @@ async function watchTravel(page,work) {
   try {
     await page.goto('http://127.0.0.1:8889/',{waitUntil:'networkidle'});await arrive(page,false);
     await checkFit(page);let s=await read(page);assert.equal(s.zoom,4);
+    assert.equal(s.width,480);assert.equal(s.height,270);assert.equal(s.sample,1);
+    assert.equal(s.background,'static/assets/attic-bg-2.png');
+    assert(fs.readFileSync(path.join(ROOT,'static/assets/attic-bg-2.png')).equals(fs.readFileSync(path.join(ROOT,'preview/attic-bg-2.png'))),'background copied unchanged');
+    assert.deepEqual(s.stations.map(d=>d.seat),[{x:96,y:118},{x:384,y:118},{x:406,y:237}]);
+    await checkBackground(page);
     assert.deepEqual(s.actors.map(a=>a.mode),['sleep','tea','read']);
     assert(s.actors.every(a=>!a.monitorOn));
     // All three residents must contribute nontransparent pixels, including the reading chair.
@@ -71,6 +105,7 @@ async function watchTravel(page,work) {
     assert((await read(page)).actors.some(a=>a.mode==='walk'));
     assert(await watchTravel(page,true)>0);await arrive(page,true);await checkFit(page);s=await read(page);
     assert(s.actors.every(a=>a.monitorOn&&Math.hypot(a.x-a.target.x,a.y-a.target.y)<.1));
+    await checkBackground(page);
     const frames=s.actors.map(a=>a.frame);await sleep(270);
     assert((await read(page)).actors.some((a,i)=>frames[i]!==a.frame));
     await page.screenshot({path:path.join(ROOT,'preview/attic-work.png')});
@@ -102,7 +137,7 @@ async function watchTravel(page,work) {
     console.log('PASS first load with working status walks to work');
     mode='idle';await page.setViewportSize({width:1920,height:1080});
     await page.goto('http://127.0.0.1:8889/office/',{waitUntil:'networkidle'});await arrive(page,false);
-    for(const suffix of ['static/office.js','static/office.css','static/assets/office-atlas.png','static/assets/office-atlas.json','api/status'])
+    for(const suffix of ['static/office.js','static/office.css','static/assets/attic-bg-2.png','static/assets/office-atlas.png','static/assets/office-atlas.json','api/status'])
       assert(resources.some(r=>r.url.endsWith(`/office/${suffix}`)&&r.status===200),`prefix resource: ${suffix}`);
     assert(calls.some(c=>c.url.endsWith('/office/api/status')));await checkFit(page);
     console.log('PASS /office/ prefix: relative CSS, JS, atlas and API');

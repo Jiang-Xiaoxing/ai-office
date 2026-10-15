@@ -1,6 +1,6 @@
 ﻿# AI 办公室
 
-姜小星的温馨阁楼工作室，一个独立运行的像素 AI 工具状态看板。斜屋顶、晚间天窗、暖灯、木地板和三张错落的书桌，像小伙伴们在家里的楼上一起干活。
+姜小星的温馨阁楼工作室，一个独立运行的像素 AI 工具状态看板。主背景使用已选定的晴天绿植图 `preview/attic-bg-2.png`，原样复制到 `static/assets/attic-bg-2.png`。人物在图中已有的三个工位和休息区活动。
 
 Codex、CodeBuddy、Claude Code（DeepSeek）各有一个原创像素角色。干活时沿家具间的通道走回自己的座位，坐下敲键盘，显示器亮起；空闲时离开工位，在看书、喝茶、打盹之间随机切换。前端每 3 秒读取一次 `api/status`，断线时保留最后一次状态并自动重连。
 
@@ -49,13 +49,17 @@ Codex、CodeBuddy、Claude Code（DeepSeek）各有一个原创像素角色。�
 
 未来加工具先在配置里加一项即可扩展后端接口。需要特殊检测方式时，在 `detectors.py` 的 `RULE_DETECTORS` 注册 `callable(rule, processes, now) -> bool`。新增可见角色还需要开发者在 `static/office.js` 的 `DESKS`、`roomLayout()` 安排工位、素材和休息位置；本次不提供“自定义添加人物”的界面。
 
-## 原创画面与素材
+## 背景与人物素材
 
-所有家具和人物均由 `scripts/draw_assets.py` 原创绘制，屋顶、天窗、灯串、地板、地毯和楼梯由 Canvas 绘制；没有下载或复制外部美术素材。图集包含 **225 个精灵，6 套人物各 36 帧**：四方向行走、敲键盘、喝茶、看书、打盹和站立。
+背景采用用户已选定的晴天绿植阁楼图，桌子、椅子、沙发、绿植和楼梯均已包含在图中，页面不再叠加另一套家具。工位依次对齐左上、右上和右下的椅子；干活时只在已有显示器内部叠加亮屏和代码动画。`static/office.js` 的 `roomLayout()` 保存按背景测量的座位、屏幕、障碍物与休息点。
+
+人物由 `scripts/draw_assets.py` 绘制。既有图集包含 **225 个精灵，6 套人物各 36 帧**：四方向行走、敲键盘、喝茶、看书、打盹和站立。图集中的旧家具仍作为历史素材保留，当前场景不绘制。
 
 `static/assets/residents.json` 保存配色与发型；`resident-*.png` 保存六个人物单独的站立图。当前使用 moss（眼镜、绿衣）、sky（卷发、蓝衣）、sun（短波波头、黄衣），备用 lilac（发髻）、rose（浅色短发）、fern（帽子）。绘制脚本使用固定种子，构建结果可复现。
 
-1920×1080、浏览器 100% 缩放下，画布为 **480×244 原始像素，以 4 倍整数显示**，角色精灵框为 104×144 屏幕像素，桌子为 312×192；整间阁楼无需拖动。画布关闭平滑，屋顶斜线也采用逐像素绘制。其他窗口按整数倍重新计算房间尺寸，手机竖屏重新排列家具；名字使用独立文本标签保持可读。减少动态效果的系统偏好会减少原地动作，状态变化仍保留连续行走。
+背景 PNG 为 1920×1080，实测与其 **480×270 像素网格的 4 倍最近邻放大完全一致**。1920×1080、浏览器 100% 缩放下，画布按这一网格 **4 倍整数显示，完整铺满一屏**；44px 顶栏与 36px 底栏位于背景原有的深色留白，不压缩或拉伸房间。其他窗口保持完整背景和原有家具位置，选择能放下的最大整数倍，剩余区域用背景边缘色居中留白。小于原生网格的窗口先按整数步长最近邻抽样，再整数倍显示；不拉伸变形，所有 Canvas 绘制和 CSS 显示均关闭平滑。调整窗口只改变投影，保留人物位置与行走路线。
+
+人物名字使用 24px、副标题和状态使用 20px，比原版约放大 2 倍；窄屏使用 16px 名字与 14px 状态。标签自动避让其他标签和人物，不遮住人物。减少动态效果的系统偏好会减少原地动作，状态变化仍保留连续行走。
 
 重绘素材仅需现有 D 盘 Python 与 Pillow；生成结果已提交，正常运行无需重绘。
 
@@ -70,11 +74,15 @@ Codex、CodeBuddy、Claude Code（DeepSeek）各有一个原创像素角色。�
 ```powershell
 & 'D:\ai-office\venv\Scripts\python.exe' 'D:\ai-office\tests\test_detectors.py'
 node tests/verify-office.cjs
+node tests/verify-labels.cjs
+& 'D:\AITools\py312\python.exe' 'D:\ai-office\tests\verify_screenshots.py'
 ```
 
 第一行使用隔离环境运行检测回归，验证进程白名单、后台排除、文件活动窗口、配置错误以及真实本机接口。临时文件只写本项目 `.browser-tmp/`，不启动或停止其他工具。
 
-第二行中的 `node` 是 JavaScript 运行程序；`tests/verify-office.cjs` 是浏览器验收脚本，应在项目目录执行。脚本启动隐藏的无头 Edge，临时拦截浏览器中的状态请求，验证连续行走、家具碰撞、随机休息活动、打字帧、显示器、断线恢复、3 秒刷新、桌面/手机布局及 `/office/` 相对资源。模拟状态不写入后端，生产页面不含模拟开关。
+第二行中的 `node` 是 JavaScript 运行程序；`tests/verify-office.cjs` 是浏览器验收脚本，应在项目目录执行。脚本启动隐藏的无头 Edge，临时拦截浏览器中的状态请求，验证背景复制一致、人物与屏幕以外超过 12 万个背景像素未被重绘、连续行走、家具碰撞、标签不遮人物且桌面文字不小于 16px、随机休息活动、打字帧、显示器、断线恢复、3 秒刷新、桌面/手机布局及 `/office/` 相对资源。模拟状态不写入后端，生产页面不含模拟开关。
+
+第三行运行标签拥挤场景检查，并覆盖两张最终截图，将文字区域的坐标临时写入 `.browser-tmp/`。第四行使用已有 D 盘 Python 与 Pillow，核对截图为 1920×1080，避开文字区域后逐块验证 4×4 像素无平滑；需接着第三行执行。检查只读本地图片，不访问网络。浏览器关闭并完成图片核对后，可以清理 `.browser-tmp/` 中的临时图和坐标文件。
 
 浏览器测试默认复用 `D:/tools/PixelAgents/node_modules/playwright` 与系统 Edge；可用环境变量 `PLAYWRIGHT_MODULE`、`OFFICE_BROWSER` 指向其他已有安装。`tests/verify-site.cjs` 可在提供现有小站凭据的进程内环境下，只读验证真实小站反代和登录边界；不生成或保存凭据。
 
@@ -83,7 +91,7 @@ node tests/verify-office.cjs
 - `preview/attic-idle.png`：全部空闲，各自在阁楼休息。
 - `preview/attic-work.png`：全部干活，全部到位、显示器亮起。
 
-手机和失败诊断图仅写入 `.browser-tmp/`，交付前清理；`preview/rpg2.png` 为保留的历史参考图，不是素材来源。
+手机和失败诊断图仅写入 `.browser-tmp/`，交付前清理；保留 `preview/rpg2.png`、`attic-bg-1.png`、`attic-bg-2.png` 和所有 `*-reject.png` 参考图。
 
 ## 文件结构
 
@@ -91,10 +99,10 @@ node tests/verify-office.cjs
 server_app.py          独立 FastAPI 后端，只监听本机 8889
 config/tools.json      工具检测规则清单
 detectors.py           配置校验、规则匹配和扩展接口
-static/                Canvas 场景、样式、六套原创像素人物
+static/                晴天绿植背景、Canvas 场景、样式、六套像素人物
 scripts/draw_assets.py 可复现的原创素材绘制脚本
 tests/                 检测回归与隐藏浏览器验收
-preview/               最终两张截图及保留的 rpg2.png
+preview/               最终两张截图及保留的背景和历史参考图
 start.vbs / stop.vbs   本机隐藏启停
 requirements*.txt     运行依赖 / 可选素材构建依赖
 ```
