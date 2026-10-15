@@ -7,12 +7,12 @@ BASE = fso.GetParentFolderName(WScript.ScriptFullName)
 
 ' 用 WMI 直接查 pythonw.exe 进程，检查命令行是否包含 ai-office\server_app.py
 Set wmi = GetObject("winmgmts:\\.\root\cimv2")
-Set procs = wmi.ExecQuery("SELECT * FROM Win32_Process WHERE Name='pythonw.exe'")
+Set procs = wmi.ExecQuery("SELECT * FROM Win32_Process WHERE Name='pythonw.exe' OR Name='python.exe'")
 
 Dim found, pid
 found = False
 For Each p In procs
-  If InStr(1, p.CommandLine, "ai-office", 1) > 0 And InStr(1, p.CommandLine, "server_app.py", 1) > 0 Then
+  If InStr(1, Replace(p.CommandLine, "\\", "\"), BASE & "\server_app.py", 1) > 0 Then
     pid = p.ProcessId
     found = True
     Exit For
@@ -20,7 +20,7 @@ For Each p In procs
 Next
 
 If found Then
-  sh.Run "taskkill /F /PID " & pid, 0, True
+  sh.Run "taskkill /T /F /PID " & pid, 0, True
   WScript.Echo "AI 办公室已停止"
 Else
   WScript.Echo "AI 办公室未在运行"
