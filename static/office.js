@@ -148,10 +148,10 @@
         let budget=dt*48;
         while(budget>0&&a.route.length) {
           const p=a.route[0],dx=p.x-a.x,dy=p.y-a.y,dist=Math.hypot(dx,dy);
-          if(dist<.01){a.route.shift();continue;}
+          if(dist<.01){a.x=p.x;a.y=p.y;a.route.shift();continue;}
           a.dir=Math.abs(dx)>Math.abs(dy)?(dx<0?1:2):(dy<0?3:0);
           const move=Math.min(budget,dist);a.x+=dx/dist*move;a.y+=dy/dist*move;
-          a.distance+=move;budget-=move;if(move===dist)a.route.shift();
+          a.distance+=move;budget-=move;if(move===dist){a.x=p.x;a.y=p.y;a.route.shift();}
         }
         if(!a.route.length){a.mode=a.arrival;a.dir=a.mode==='type'?3:0;a.idleTime=12+Math.random()*10;}
       } else if(a.requested==='idle') {
