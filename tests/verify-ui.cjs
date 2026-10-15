@@ -5,30 +5,49 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'D:/tools/PixelAgents/no
 const ROOT=path.resolve(__dirname,'..'),TMP=path.join(ROOT,'.browser-tmp');
 fs.mkdirSync(TMP,{recursive:true});
 const overlap=(a,b,gap=0)=>a.x<b.x+b.w+gap&&a.x+a.w+gap>b.x&&a.y<b.y+b.h+gap&&a.y+a.h+gap>b.y;
-async function geometry(page) {
-  const result=await page.evaluate(()=>{
+async function roomState(page) {
+  return page.evaluate(()=>{
     const s=officeDebug.snapshot(),r=document.getElementById('game').getBoundingClientRect();
-    const boxes=[...document.querySelectorAll('.nameplate')].map(el=>{
-      const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
-    });
-    const bodies=s.actors.map(a=>({x:r.x+(Math.round(a.x)-13)*s.pixelScale,
-      y:r.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,w:26*s.pixelScale,h:36*s.pixelScale}));
-    return {boxes,bodies,room:{x:r.x,y:r.y,w:r.width,h:r.height},s};
+    const box=el=>{const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};};
+    return {s,room:{x:r.x,y:r.y,w:r.width,h:r.height},
+      plates:[...document.querySelectorAll('.nameplate')].filter(el=>!el.hidden).map(el=>({...box(el),id:el.dataset.actor})),
+      bodies:s.actors.map(a=>({id:a.id,x:r.x+(Math.round(a.x)-13)*s.pixelScale,
+        y:r.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,w:26*s.pixelScale,h:36*s.pixelScale,
+        cx:r.x+Math.round(a.x)*s.pixelScale}))};
   });
-  const {boxes,bodies,room,s}=result;
-  assert.equal(boxes.length,s.actors.length);
-  boxes.forEach((b,i)=>{
-    assert(b.x>=room.x&&b.y>=room.y&&b.x+b.w<=room.x+room.w&&b.y+b.h<=room.y+room.h,'labels stay inside the rendered room: '+JSON.stringify({b,room,scale:s.pixelScale}));
-    boxes.slice(i+1).forEach(q=>assert(!overlap(b,q,8),'nameplates keep at least 8px separation'));
-    bodies.forEach(q=>assert(!overlap(b,q),'nameplates preserve resident sprites'));
-    assert(Number.isInteger(b.x)&&Number.isInteger(b.y),'pixel-aligned nameplate');
+}
+function checkIcons({s,room,bodies}) {
+  assert.equal(s.actors.length,bodies.length);
+  for(const a of s.actors) {
+    const body=bodies.find(b=>b.id===a.id);
+    assert(a.icon,`${a.id} wears a head-level status icon`);
+    assert(a.icon.w>0&&a.icon.h>0&&a.icon.x>=0&&a.icon.y>=0&&a.icon.x+a.icon.w<=s.width&&a.icon.y+a.icon.h<=s.height,
+      'status icon stays inside the room grid');
+    assert(a.icon.x>=Math.round(a.x)+13||a.icon.x+a.icon.w<=Math.round(a.x)-13,'status icon never covers its resident');
+    assert(Math.abs(room.y+a.icon.y*s.pixelScale-body.y)<=s.pixelScale*3,'status icon rides at the resident head');
+  }
+}
+function checkPlates(page,{s,room,bodies,plates},expected) {
+  assert.deepEqual(plates.map(p=>p.id).sort(),[...expected].sort(),'only the asked-for plates are on screen');
+  plates.forEach((p,i)=>{
+    assert(p.x>=room.x&&p.y>=room.y&&p.x+p.w<=room.x+room.w&&p.y+p.h<=room.y+room.h,'labels stay inside the rendered room: '+JSON.stringify({p,room,scale:s.pixelScale}));
+    plates.slice(i+1).forEach(q=>assert(!overlap(p,q,8),'nameplates keep at least 8px separation'));
+    bodies.forEach(q=>assert(!overlap(p,q),'nameplates preserve resident sprites'));
+    assert(Number.isInteger(p.x)&&Number.isInteger(p.y),'pixel-aligned nameplate');
     if(page.viewportSize().width>=1000) {
-      assert(b.y+b.h<=bodies[i].y-8,'nameplate above its own head: '+JSON.stringify({b,body:bodies[i],id:s.actors[i].id}));
-      const cx=room.x+Math.round(s.actors[i].x)*s.pixelScale;
-      if(cx-b.w/2>=room.x+18*s.pixelScale&&cx+b.w/2<=room.x+466*s.pixelScale)
-        assert(Math.abs(b.x+b.w/2-cx)<=Math.max(1,s.pixelScale),'nameplate centered over its resident');
+      const body=bodies.find(b=>b.id===p.id);
+      assert(p.y+p.h<=body.y-8,'nameplate above its own head: '+JSON.stringify({p,body,id:p.id}));
+      if(body.cx-p.w/2>=room.x+18*s.pixelScale&&body.cx+p.w/2<=room.x+466*s.pixelScale)
+        assert(Math.abs(p.x+p.w/2-body.cx)<=Math.max(1,s.pixelScale),'nameplate centered over its resident');
     }
   });
+}
+// Resting rooms show no billboard at all: only the small status icon travels
+// with each resident until the pointer asks for a nameplate.
+async function geometry(page) {
+  const state=await roomState(page);
+  checkIcons(state);
+  checkPlates(page,state,[]);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth||document.documentElement.scrollHeight>innerHeight),false);
 }
 (async()=>{
@@ -60,8 +79,14 @@ async function geometry(page) {
       assert(await page.locator('h1').evaluate(e=>parseFloat(getComputedStyle(e).fontSize)>=28));
       const typography=await page.locator('.owner,.interaction-hint span,.connection,#ts,.agent-status,.agent-status em').evaluateAll(els=>els.filter(e=>e.getClientRects().length).map(e=>parseFloat(getComputedStyle(e).fontSize)));
       assert(typography.every(n=>n>=18),'HUD text at least 18px');
+      // A plate only exists while it is asked for, so hover one to read it.
+      await page.waitForFunction(()=>officeDebug.snapshot().actors.every(a=>a.mode!=='walk'));
+      await page.locator('[data-target="resident:codex"]').hover();
       const labels=await page.locator('.nameplate strong,.nameplate small,.nameplate span').evaluateAll(els=>els.filter(e=>e.getClientRects().length).map(e=>parseFloat(getComputedStyle(e).fontSize)));
-      assert(labels.every(n=>n>=16),'nameplates at least 16px');
+      assert(labels.length>=2&&labels.every(n=>n>=16),'nameplates at least 16px');
+      checkPlates(page,await roomState(page),['codex']);
+      await page.mouse.move(size.width-4,20);
+      checkPlates(page,await roomState(page),[]);
       const header=await page.locator('#bar').evaluate(el=>{const b=el.getBoundingClientRect();return [...el.children].filter(e=>e.getClientRects().length).map(e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height,top:b.top,bottom:b.bottom};});});
       for(const r of header)assert(r.x>=0&&r.x+r.w<=size.width&&r.y>=r.top&&r.y+r.h<=r.bottom,'header stays in one row');
       assert(await page.locator('.office-icon').evaluate(e=>e.complete&&e.naturalWidth>0));
@@ -79,11 +104,13 @@ async function geometry(page) {
         await page.keyboard.press('Escape');
       }
       await page.locator('[data-target="tea-table"]').click();assert(await page.locator('#interaction-note').isVisible());await page.keyboard.press('Escape');
-      await page.mouse.move(size.width-4,80);
+      // Park the pointer on the header strip: no resident can sit under it, so
+      // the resting-room checks and the delivery screenshot stay plate-free.
+      await page.mouse.move(size.width-4,20);
       await page.evaluate(()=>document.activeElement?.blur());
       await page.waitForTimeout(2800);
       await geometry(page);
-      const masks=await page.locator('.nameplate,#bar,#footer').evaluateAll(els=>els.map(el=>{
+      const masks=await page.locator('.nameplate:not([hidden]),#bar,#footer').evaluateAll(els=>els.map(el=>{
         const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
       }));
       await page.screenshot({path:path.join(ROOT,'preview',name+'.png')});

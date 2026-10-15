@@ -45,17 +45,14 @@ async function checkFit(page) {
   }
   for(const a of s.actors)assert(a.walkable,`${a.id} blocked ${a.x},${a.y}`);
   for(const p of s.spots)assert(p.walkable,`leisure destination blocked ${p.x},${p.y}`);
-  const plates=await page.locator('.nameplate').evaluateAll(els=>els.map(e=>{const b=e.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};}));
-  for(const p of plates) {
-    assert(p.x>=0&&p.y>=room.y&&p.x+p.w<=room.width&&p.y+p.h<=room.y+room.height,'nameplate fits');
-    assert(bars.every(b=>!overlaps(p,b)),'bars must not cover nameplates');
-  }
-  plates.forEach((p,i)=>plates.slice(i+1).forEach(q=>assert(!(p.x<q.x+q.w&&p.x+p.w>q.x&&p.y<q.y+q.h&&p.y+p.h>q.y),'nameplates must not overlap')));
+  // Resting rooms carry no billboard: a plate only exists while it is hovered
+  // or pinned, so nothing here may sit over the art or the residents.
+  const plates=await page.locator('.nameplate:not([hidden])').evaluateAll(els=>els.map(e=>{const b=e.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};}));
+  assert.deepEqual(plates,[],'no nameplate is drawn until a resident is hovered or pinned');
   for(const a of s.actors) {
     const q={x:box.x+(Math.round(a.x)-13)*s.pixelScale,y:box.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,
       w:26*s.pixelScale,h:36*s.pixelScale};
     assert(bars.every(b=>!overlaps(q,b)),'bars must not cover residents');
-    for(const p of plates)assert(!(p.x<q.x+q.w&&p.x+p.w>q.x&&p.y<q.y+q.h&&p.y+p.h>q.y),'nameplates must not cover a resident');
   }
   for(const d of s.stations) {
     const screen={x:box.x+d.screen.x*s.pixelScale,y:box.y+d.screen.y*s.pixelScale,w:d.screen.w*s.pixelScale,h:d.screen.h*s.pixelScale};
@@ -74,6 +71,9 @@ async function checkBackground(page) {
     const c=ref.getContext('2d');c.imageSmoothingEnabled=false;c.drawImage(image,0,0,480,270);
     const expected=c.getImageData(0,0,480,270).data,actual=game.getContext('2d').getImageData(0,0,480,270).data;
     const overlays=s.actors.map(a=>({x:Math.round(a.x)-19,y:Math.round(a.y)-(a.mode==='type'?46:40),w:38,h:48}));
+    // The head-level status icon is canvas overlay too, and the napping Zz
+    // drifts a few pixels up; mask the whole band it can reach.
+    overlays.push(...s.actors.map(a=>a.icon).filter(Boolean).map(i=>({x:i.x,y:i.y-4,w:i.w,h:i.h+4})));
     overlays.push(...s.stations.map(d=>d.screen));
     let checked=0,bad=0;
     for(let y=0;y<270;y++)for(let x=0;x<480;x++) {
@@ -85,6 +85,17 @@ async function checkBackground(page) {
   });
   assert(result.checked>120000,`background coverage: ${result.checked}`);
   assert.equal(result.bad,0,'approved background stays pixel-identical outside residents and existing screens');
+}
+// Delivery captures record the resting room and their own HTML overlay bounds,
+// so verify_screenshots.py can tell text from art without a stale mask file.
+async function capture(page,name) {
+  await page.mouse.move(1900,20);
+  assert.equal(await page.locator('.nameplate:not([hidden])').count(),0,'captures record the plate-free room');
+  await page.screenshot({path:path.join(ROOT,'preview',`${name}.png`)});
+  const masks=await page.locator('.nameplate:not([hidden]),#bar,#footer').evaluateAll(els=>els.map(el=>{
+    const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
+  }));
+  fs.writeFileSync(path.join(TMP,`${name}-masks.json`),JSON.stringify(masks));
 }
 async function watchTravel(page,work) {
   let previous=await read(page),prevTime=Date.now(),moving=0;
@@ -138,7 +149,7 @@ async function watchTravel(page,work) {
     assert.equal(await page.locator('#roster .agent-status').nth(1).locator('span').textContent(),'Claude Code (OpenRouter)');
     assert.equal(await page.locator('body').textContent().then(s=>s.includes('CodeBuddy')),false);
     // All three residents must contribute nontransparent pixels, including the reading chair.
-    await page.screenshot({path:path.join(ROOT,'preview/attic-idle.png')});
+    await capture(page,'attic-idle');
     console.log('PASS 1920x1080 idle: 4x pixels fill one screen, thin readable bars, three leisure animations');
     mode='working';await page.waitForFunction(()=>window.officeDebug.snapshot().actors.every(a=>a.requested==='working'));
     assert((await read(page)).actors.some(a=>a.mode==='walk'));
@@ -147,7 +158,7 @@ async function watchTravel(page,work) {
     await checkBackground(page);
     const frames=s.actors.map(a=>a.frame);await sleep(270);
     assert((await read(page)).actors.some((a,i)=>frames[i]!==a.frame));
-    await page.screenshot({path:path.join(ROOT,'preview/attic-work.png')});
+    await capture(page,'attic-work');
     console.log('PASS walking to own chairs, continuous movement, collision checks, typing and monitor wake');
     mode='idle';await page.waitForFunction(()=>window.officeDebug.snapshot().actors.every(a=>a.requested==='idle'));
     assert(await watchTravel(page,false)>0);await arrive(page,false);

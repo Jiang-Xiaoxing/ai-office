@@ -1,6 +1,8 @@
 /* Approved sunny attic. Coordinates use the background's native 480x270 pixel grid.
  * Register future detectors in config/tools.json. Resident art lives in assets/residents.json.
  * Every resource and API URL is relative so an /office/ reverse proxy also works.
+ * Residents carry a tiny pixel status icon beside the head; the full parchment
+ * nameplate only pops up while a resident is hovered, pinned or focused.
  */
 (() => {
   'use strict';
@@ -16,8 +18,38 @@
   const ACTIVITIES = { sleep: '打盹', read: '看书', tea: '喝茶', type: '敲键盘', walk: '走动' };
   // Optional runtime hint (e.g. "Flash") from the backend is appended to the display name.
   const displayName = t => [t.name || t.id, t.detail].filter(Boolean).join(' · ');
+  // Tiny head-level status art, drawn on the room grid so it stays crisp and
+  // follows its resident exactly. Rows are source pixels; '.' is transparent.
+  // Ink outlines keep them readable in daylight, the warm lantern gold keeps
+  // them readable once the room dims for the night.
+  const ICONS = {
+    keyboard: { palette: { 1: '#3b3230', 2: '#ffd98a' }, rows: [
+      '1111111111', '1221221221', '.11111111.'] },
+    cup: { palette: { 1: '#3b3230', 2: '#ffd98a', 4: '#f0e3ce' }, rows: [
+      '..4..4..', '...4..4.', '1111111.', '1222221.', '12222211', '.12222.1', '..1111..'] },
+    book: { palette: { 1: '#3b3230', 2: '#ffd98a' }, rows: [
+      '111111111', '1222.2221', '1222.2221', '1222.2221', '111111111'] },
+    zzz: { palette: { 1: '#ffd98a' }, rows: [
+      '11111.111.', '...11..1..', '..11..111.', '.11.......', '11111.....'] },
+    steps: { palette: { 1: '#ffd98a' }, rows: [
+      '.11.....', '11......', '.....11.', '....11..'] },
+    dots: { palette: { 1: '#ffd98a' }, rows: [
+      '11.11.11', '11.11.11'] },
+  };
+  const STATE_ICONS = { type: 'keyboard', tea: 'cup', read: 'book', sleep: 'zzz', walk: 'steps' };
+  // A catch-all detector for a service that could not be recognised ("Claude
+  // Code" without a known provider) has no permanent seat: it only appears in
+  // the room, and only then occupies a workstation, while it is really busy.
+  const FALLBACK_TOOL = /认不出|未识别|无法识别|未知|unknown|other/i;
   const actors = [];
   let tools = [], residents = [], overflowNotice = '';
+  let hovered = null, pinned = null, hoverSuppressed = null, keyboardNav = false;
+  // The resident id behind any interaction target, so hover, pins and keyboard
+  // focus all speak the same language.
+  const residentId = node => {
+    const id = node?.closest?.('[data-target]')?.dataset.target;
+    return id?.startsWith('resident:') ? id.slice(9) : null;
+  };
   const ROOM = { w: 480, h: 270 };
   let atlas, background, metadata, scene, weather, interaction, layout, initialized = false, lastTime = 0, clock = 0;
   let latest = null, polls = 0, connected = false, polling = false;
@@ -28,6 +60,20 @@
   function sprite(name, x, y, c = ctx) {
     const s = metadata[name];
     if (s) c.drawImage(atlas, ...s, Math.round(x), Math.round(y), s[2], s[3]);
+  }
+  function headTop(a) {return Math.round(a.y)-(a.mode==='type'?40:34);}
+  function iconName(a) {return a.requested===null?'dots':STATE_ICONS[a.mode]||'dots';}
+  function iconBox(a) {
+    // Beside the 26px-wide sprite, mirrored to the left near the right wall so
+    // the icon always stays inside the room.
+    const name=iconName(a),rows=ICONS[name].rows,w=Math.max(...rows.map(row=>row.length)),x=Math.round(a.x);
+    return {name,x:x+14+w<=ROOM.w-3?x+14:x-14-w,y:headTop(a)+2,w,h:rows.length};
+  }
+  function drawIcon(name,x,y,c=ctx) {
+    const art=ICONS[name];if(!art)return;
+    art.rows.forEach((row,j)=>{for(let i=0;i<row.length;i++) {
+      const color=art.palette[row[i]];if(color)rect(x+i,y+j,1,1,color,c);
+    }});
   }
   function roomLayout() {
     // Chairs, monitor interiors and obstacles are measured on attic-bg-2.png / 4.
@@ -103,9 +149,14 @@
     }
     weather=AtticWeather.create(scene);
   }
+  function isFallbackTool(t) {return FALLBACK_TOOL.test(`${t.id} ${t.name||''}`);}
+  function roomTools() {
+    // Idle catch-alls stay in the footer only, so they never hold a person slot.
+    return tools.filter(t=>t.status==='working'||!isFallbackTool(t)).slice(0,CAPACITY);
+  }
   function syncTools(incoming) {
     tools=incoming.map(t=>({...t}));
-    const visible=tools.slice(0,CAPACITY),used=new Set();
+    const visible=roomTools(),used=new Set();
     // Reserve resident identities before assigning new tools, even if config is reordered.
     const slots=new Map(visible.filter(t=>Object.hasOwn(HOMES,t.id)).map(t=>[t.id,HOMES[t.id]]));
     slots.forEach(slot=>used.add(slot));
@@ -132,7 +183,7 @@
       }
       createLabels();
     }
-    const excess=tools.slice(CAPACITY).map(t=>t.id).join(',');
+    const excess=tools.filter(t=>!visible.includes(t)).map(t=>t.id).join(',');
     if(excess&&excess!==overflowNotice)console.warn(`暖灯小阁最多显示 ${CAPACITY} 人；其余工具仅在底栏显示：${excess}`);
     overflowNotice=excess;
   }
@@ -207,8 +258,6 @@
     if(!initialized){layout=roomLayout();buildScene();}
     Object.assign(layout,{zoom,sample,pixelScale,ox,oy,viewportWidth:ww,viewportHeight:wh});
     document.body.dataset.density=pixelScale>=3?'normal':pixelScale>=1.5?'compact':'tiny';
-    for(const a of actors)if(a.label){a.label.style.width='';a.label.style.height='';}
-    labels.layoutKey=null;
     // Resizing only changes projection; do not teleport residents or interrupt a walk.
     if(!initialized)actors.forEach(a=>{
       const target=destination(a),p=nearestFree(target);
@@ -246,79 +295,108 @@
     }
     if(Math.floor(clock*3)%2)rect(x+16,y+h-2,2,1,'#f3d99f');
   }
+  function spriteBox(a) {
+    const s=layout.pixelScale;
+    return {x:layout.ox+(Math.round(a.x)-13)*s,y:layout.oy+headTop(a)*s,w:26*s,h:36*s};
+  }
+  const overlaps=(p,q,gap=0)=>p.x<q.x+q.w+gap&&p.x+p.w+gap>q.x&&p.y<q.y+q.h+gap&&p.y+p.h+gap>q.y;
   function updateLabels() {
+    // Keyboard focus keeps its gold-rimmed plate as focus indicator; a mouse
+    // click must not, or "click again to collapse" would never collapse.
+    const focused=keyboardNav?residentId(document.activeElement):null;
     for(const a of actors) {
       const el=a.label;
       const state=a.requested===null?'连接中':ACTIVITIES[a.mode]||'歇一会';
-      if(el.lastElementChild.textContent!==state) {
-        el.lastElementChild.textContent=state;el.style.width='';el.style.height='';labels.layoutKey=null;
-      }
+      if(el.lastElementChild.textContent!==state)el.lastElementChild.textContent=state;
       el.classList.toggle('working',a.requested==='working');
+      el.classList.toggle('pinned',pinned===a.id);
+      // No permanent billboards: a plate exists only while it is being asked for.
+      el.hidden=pinned!==a.id&&hovered!==a.id&&focused!==a.id;
     }
-    const ww=wrap.clientWidth,wh=wrap.clientHeight,scale=layout.pixelScale;
-    const grid=Math.max(1,scale),gap=Math.max(8,grid*2);
-    const up=n=>Math.ceil(n/grid)*grid,down=n=>Math.floor(n/grid)*grid;
-    const room=wrap.getBoundingClientRect();
-    // Nameplates belong to the room, even when an integer zoom leaves a surround.
+    const shown=actors.filter(a=>!a.label.hidden);
+    if(!shown.length)return;
+    const scale=layout.pixelScale,room=wrap.getBoundingClientRect();
+    const gap=Math.max(8,Math.round(scale)*2);
+    // Plates belong to the room, even when an integer zoom leaves a surround.
     const bounds={
-      left:up(layout.ox+(scale<1?0:18*scale)),right:down(layout.ox+(scale<1?480:466)*scale),
-      top:up(Math.max(layout.oy+(scale<1?0:10*scale),document.getElementById('bar').getBoundingClientRect().bottom-room.top+gap)),
-      bottom:down(Math.min(layout.oy+248*scale,document.getElementById('footer').getBoundingClientRect().top-room.top-gap)),
+      left:Math.round(layout.ox+(scale<1?0:18*scale)),right:Math.round(layout.ox+(scale<1?480:466)*scale),
+      top:Math.round(Math.max(layout.oy+(scale<1?0:10*scale),document.getElementById('bar').getBoundingClientRect().bottom-room.top+gap)),
+      bottom:Math.round(Math.min(layout.oy+248*scale,document.getElementById('footer').getBoundingClientRect().top-room.top-gap)),
     };
-    const bodies=actors.map(a=>({x:layout.ox+(Math.round(a.x)-13)*scale-3,
-      y:layout.oy+(Math.round(a.y)-(a.mode==='type'?40:34))*scale-3,
-      w:26*scale+6,h:36*scale+6}));
-    const overlaps=(p,q)=>p.x<q.x+q.w+gap&&p.x+p.w+gap>q.x&&p.y<q.y+q.h+gap&&p.y+p.h+gap>q.y;
-    const plates=actors.map(a=>{
-      const el=a.label;el.style.maxWidth=`${bounds.right-bounds.left}px`;
-      const w=up(el.offsetWidth);el.style.width=`${w}px`;
-      return {a,w,h:up(el.offsetHeight),cx:layout.ox+Math.round(a.x)*scale,
-        y:layout.oy+(Math.round(a.y)-(a.mode==='type'?40:34))*scale-gap-up(el.offsetHeight)};
-    });
-    // Re-solve only when geometry changes, not on each animation frame.
-    const key=[ww,wh,scale,...Object.values(bounds),...actors.flatMap((a,i)=>[
-      Math.round(a.x),Math.round(a.y),a.mode,plates[i].w,plates[i].h])].join('|');
-    if(labels.layoutKey===key)return;labels.layoutKey=key;
-    const furniture=layout.protected.map(d=>({
-      x:layout.ox+d.x*scale,y:layout.oy+d.y*scale,w:d.w*scale,h:d.h*scale}));
-    const addedFurniture=layout.desks.filter(d=>d.furniture).map(({furniture:d})=>({
-      x:layout.ox+d.x*scale,y:layout.oy+d.y*scale,w:d.w*scale,h:d.h*scale}));
-    // Preserve residents' vertical order so crowded cards remain easy to identify.
-    const ordered=plates.sort((a,b)=>a.y-b.y||b.w*b.h-a.w*a.h||a.a.index-b.a.index);
-    function solve(avoidFurniture,centered=true) {
-      const fixed=avoidFurniture?[...bodies,...furniture]:[...bodies,...addedFurniture],placed=[];
-      let budget=1200;
-      function place(index) {
-        if(index===ordered.length)return true;
-        if(--budget<0)return false;
-        const p=ordered[index],clampX=x=>Math.max(bounds.left,Math.min(bounds.right-p.w,down(x)));
-        const clampY=y=>Math.max(bounds.top,Math.min(bounds.bottom-p.h,down(y)));
-        const desired={x:clampX(p.cx-p.w/2),y:clampY(p.y)};
-        const obstacles=[...fixed,...placed];
-        const xs=new Set(centered?[desired.x]:[desired.x,bounds.left,bounds.right-p.w,...obstacles.flatMap(q=>[clampX(q.x-p.w-gap),clampX(up(q.x+q.w+gap))])]);
-        const ys=new Set([desired.y,bounds.top,bounds.bottom-p.h,...obstacles.flatMap(q=>[clampY(q.y-p.h-gap),clampY(up(q.y+q.h+gap))])]);
-        const candidates=[];
-        for(const x of xs)for(const y of ys) {
-          const r={x,y,w:p.w,h:p.h};
-          if(r.x>=bounds.left&&r.x+r.w<=bounds.right&&r.y>=bounds.top&&r.y+r.h<=bounds.bottom&&(!centered||r.y<=desired.y)&&
-            !obstacles.some(q=>overlaps(r,q)))candidates.push(r);
+    const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+    const crowds=actors.filter(a=>a.label.hidden).map(spriteBox),taken=[];
+    for(const a of shown) {
+      const el=a.label;el.style.maxWidth=`${Math.max(0,bounds.right-bounds.left)}px`;el.style.width='';
+      const w=Math.min(el.offsetWidth,bounds.right-bounds.left),h=el.offsetHeight;
+      // Anchor to the resident's live coordinates, so a plate never waits at the
+      // workstation a walker just left.
+      const cx=layout.ox+Math.round(a.x)*scale;
+      const desired={x:Math.round(cx-w/2),y:Math.round(layout.oy+headTop(a)*scale-gap-h)};
+      // Stay over the resident's own head: lift the plate before stepping aside.
+      const spots=[{x:desired.x,y:desired.y}];
+      for(let step=1;step<=5;step++)spots.push({x:desired.x,y:desired.y-step*(h+gap)});
+      for(let step=1;step<=3;step++)spots.push({x:desired.x-step*(w+gap),y:desired.y},{x:desired.x+step*(w+gap),y:desired.y});
+      const fit=obstacles=>{
+        for(const spot of spots) {
+          const r={x:clamp(spot.x,bounds.left,bounds.right-w),y:clamp(spot.y,bounds.top,bounds.bottom-h),w,h};
+          if(!obstacles.some(q=>overlaps(r,q,gap)))return r;
         }
-        candidates.sort((a,b)=>Math.hypot(a.x-desired.x,a.y-desired.y)-Math.hypot(b.x-desired.x,b.y-desired.y));
-        for(const r of candidates.slice(0,24)) {
-          placed.push(r);if(place(index+1))return true;placed.pop();
-        }
-        return false;
-      }
-      return place(0)?placed:null;
+        return null;
+      };
+      // Above the head first, then dodging the other residents, then merely
+      // dodging the other plates; staying inside the room is not negotiable.
+      const r=fit([...taken,...crowds])||fit(taken)||
+        {x:clamp(desired.x,bounds.left,bounds.right-w),y:clamp(desired.y,bounds.top,bounds.bottom-h),w,h};
+      taken.push(r);
+      el.style.left=`${r.x}px`;el.style.top=`${r.y}px`;
+      el.style.setProperty('--pointer-x',`${Math.max(8,Math.min(w-8,cx-r.x))}px`);
     }
-    // Head anchoring takes precedence over original background details.
-    // Residents, added stations, room bounds and label spacing are hard constraints.
-    const placed=solve(true)||solve(false)||solve(false,false);
-    if(!placed){labels.layoutKey=null;return;}
-    ordered.forEach((p,i)=>{
-      const r=placed[i];p.a.label.style.left=`${r.x}px`;p.a.label.style.top=`${r.y}px`;
-      p.a.label.style.height=`${r.h}px`;
-      p.a.label.style.setProperty('--pointer-x',`${Math.max(8,Math.min(p.w-8,p.cx-r.x))}px`);
+  }
+  function followResidents() {
+    const layer=document.getElementById('interaction-targets');
+    const residentOf=residentId;
+    // Tab/Enter/Space count as keyboard travel, the mouse does not: that is
+    // what decides whether a focused resident keeps its plate on screen.
+    document.addEventListener('keydown',event=>{
+      if(['Tab','Enter',' '].includes(event.key)){keyboardNav=true;updateLabels();}
+    });
+    document.addEventListener('pointerdown',()=>{
+      if(keyboardNav){keyboardNav=false;updateLabels();}
+    });
+    document.addEventListener('focusin',()=>updateLabels());
+    document.addEventListener('focusout',()=>updateLabels());
+    // Hover reveals a plate; a click pins one; clicking again, clicking empty
+    // room space or pressing Escape puts it away.
+    // Hover and pins repaint the plates right away; waiting for the next frame
+    // would let a click look ignored for a moment.
+    layer.addEventListener('pointerover',event=>{
+      const id=residentOf(event.target);
+      if(id&&id!==hoverSuppressed){hovered=id;updateLabels();}
+    });
+    layer.addEventListener('pointerout',event=>{
+      const id=residentOf(event.target);if(!id)return;
+      let repaint=false;
+      if(hovered===id){hovered=null;repaint=true;}
+      // A clicked-shut plate stays shut while the pointer still rests on that
+      // resident: the browser re-dispatches hover whenever a moving target
+      // changes under a stationary cursor, so ask where the pointer really is.
+      if(hoverSuppressed===id&&residentOf(document.elementFromPoint(event.clientX,event.clientY))!==id)
+        hoverSuppressed=null;
+      if(repaint)updateLabels();
+    });
+    layer.addEventListener('click',event=>{
+      const id=residentOf(event.target);if(!id)return;
+      if(pinned===id){pinned=null;hoverSuppressed=id;hovered=null;}
+      else {pinned=id;hoverSuppressed=null;}
+      updateLabels();
+    });
+    // Clicking any empty spot puts a pinned plate away; the greeting message's
+    // own close button only closes the message.
+    document.addEventListener('click',event=>{
+      if(!residentOf(event.target)&&!event.target.closest?.('#interaction-note')){pinned=null;updateLabels();}
+    });
+    document.addEventListener('keydown',event=>{
+      if(event.key==='Escape'){pinned=null;hovered=null;hoverSuppressed=null;updateLabels();}
     });
   }
   function render(now) {
@@ -333,21 +411,23 @@
     const drawables=[];
     actors.forEach(a=>drawables.push({depth:a.y,draw:()=>{
       const f=reduced.matches&&a.mode!=='walk'?0:a.frame;
-      sprite(`${a.sprite}-${a.mode}-${a.mode==='walk'?a.dir:0}-${f}`,a.x-13,a.y-(a.mode==='type'?40:34));
-      if(a.mode==='sleep') {
-        const x=Math.round(a.x)+11,y=Math.round(a.y)-32-(Math.floor(clock)%3)*2;
-        rect(x,y,4,1,'#f6e2b8');rect(x+2,y+1,1,1,'#f6e2b8');rect(x+1,y+2,1,1,'#f6e2b8');rect(x,y+3,4,1,'#f6e2b8');
-      }
+      sprite(`${a.sprite}-${a.mode}-${a.mode==='walk'?a.dir:0}-${f}`,a.x-13,headTop(a));
+      // The status icon rides along with its resident, even mid-stride, and
+      // drifts upward while dozing so the nap still reads as a nap.
+      const icon=iconBox(a);
+      drawIcon(icon.name,icon.x,icon.y-(icon.name==='zzz'?Math.floor(clock)%3*2:0));
     }}));
     drawables.sort((a,b)=>a.depth-b.depth).forEach(d=>d.draw());
     interaction.update(now);interaction.draw(ctx,now,reduced.matches);
     updateLabels();requestAnimationFrame(render);
   }
   function createLabels() {
-    labels.replaceChildren();labels.layoutKey=null;
+    labels.replaceChildren();
+    if(!actors.some(a=>a.id===pinned))pinned=null;
+    if(!actors.some(a=>a.id===hovered))hovered=null;
     for(const a of actors) {
       const el=document.createElement('div');el.className='nameplate';el.style.setProperty('--agent-color',a.color);
-      el.title=a.rosterName;el.dataset.actor=a.id;
+      el.title=a.rosterName;el.dataset.actor=a.id;el.hidden=true;
       const name=document.createElement('strong');name.textContent=a.name;
       el.append(name);
       if(a.subtitle){const sub=document.createElement('small');sub.textContent=a.subtitle;el.append(sub);}
@@ -400,9 +480,11 @@
       sample:layout?.sample,pixelScale:layout?.pixelScale,ox:layout?.ox,oy:layout?.oy,
       background:background?.getAttribute('src'),smoothing:ctx.imageSmoothingEnabled,
       weather:weather?.snapshot(),interactions:interaction?.snapshot(),capacity:CAPACITY,tools:tools.map(t=>({...t})),
+      nameplates:{hovered,pinned,visible:actors.filter(a=>!a.label?.hidden).map(a=>a.id)},
       actors:actors.map(a=>({id:a.id,name:a.name,sprite:a.sprite,slot:a.slot,x:a.x,y:a.y,mode:a.mode,frame:a.frame,dir:a.dir,requested:a.requested,
         idleSlot:a.idleSlot,idleChanges:a.idleChanges,route:a.route.map(p=>({...p})),
         target:initialized?destination(a):null,walkable:initialized?walkable(a.x,a.y):false,
+        icon:initialized?iconBox(a):null,
         monitorOn:a.mode==='type'&&a.requested==='working'})),
       obstacles:layout?.blocks.map(b=>({...b})),stations:layout?.desks.map(d=>({...d})),
       protected:layout?.protected.map(b=>({...b})),
@@ -424,6 +506,7 @@
         zoneIds.add(z.id);
       }
       atlas=image;background=room;metadata=data;residents=looks;fit();
+      followResidents();
       interaction=AtticInteractions.create({canvas,getActors:()=>actors,getLayout:()=>layout,isConnected:()=>connected,zones});
       await poll();updateRoster();document.getElementById('loading').hidden=true;
       requestAnimationFrame(render);setInterval(poll,3000);new ResizeObserver(fit).observe(wrap);

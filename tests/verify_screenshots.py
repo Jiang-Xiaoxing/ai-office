@@ -14,11 +14,19 @@ except ModuleNotFoundError:
         raise
     raise SystemExit(subprocess.call([str(art_python), str(Path(__file__).resolve()), *sys.argv[1:]]))
 root = Path(__file__).resolve().parents[1]
-for name in sys.argv[1:] or ('attic-idle.png', 'attic-work.png', 'attic-weather.png', 'attic-six.png'):
+# The default list is exactly what a normal `node tests/run-all.cjs` records:
+# verify-office writes attic-idle/attic-work, verify-weather attic-weather.
+# attic-six.png only comes from the documented `verify-dynamic.cjs --live6`
+# run (temporary six-tool config plus a real backend restart); check it by
+# passing it explicitly after that run, e.g.
+# python tests/verify_screenshots.py attic-six.png
+for name in sys.argv[1:] or ('attic-idle.png', 'attic-work.png', 'attic-weather.png'):
     im = Image.open(root / 'preview' / name).convert('RGB')
     assert im.size == (1920, 1080), im.size
     # Run the matching browser capture first to record each image's HTML overlay bounds.
-    masks = json.loads((root / '.browser-tmp' / f'{Path(name).stem}-masks.json').read_text())
+    masks_path = root / '.browser-tmp' / f'{Path(name).stem}-masks.json'
+    assert masks_path.is_file(), f'{name}: run its browser capture first, {masks_path.name} is missing'
+    masks = json.loads(masks_path.read_text())
     # The room fills 1920x1080 at 4x, starting at (0, 0). HTML text is separate.
     # Every unobscured 4x4 block must be one source pixel, without smoothing.
     pixels = im.load()

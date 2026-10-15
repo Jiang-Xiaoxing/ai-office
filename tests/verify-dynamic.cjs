@@ -13,6 +13,30 @@ async function settled(page,count,mode) {
       (mode==='working'?a.mode==='type':mode==='idle'?['sleep','tea','read'].includes(a.mode):a.mode!=='walk'));
   },{count,mode},{timeout:25000});
 }
+// Hovering one resident must pop its own plate, hugging its head, and the
+// plate must collapse again the moment the pointer leaves.
+async function probe(page,index) {
+  const actor=(await read(page)).actors[index];
+  await page.locator(`[data-target="resident:${actor.id}"]`).hover();
+  const state=await page.evaluate(()=>{
+    const s=officeDebug.snapshot(),r=document.getElementById('game').getBoundingClientRect();
+    const boxes=[...document.querySelectorAll('.nameplate:not([hidden])')].map(el=>{
+      const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height,id:el.dataset.actor};
+    });
+    return {boxes,scale:s.pixelScale,bodies:s.actors.map(a=>({id:a.id,x:r.x+(Math.round(a.x)-13)*s.pixelScale,
+      y:r.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,w:26*s.pixelScale,h:36*s.pixelScale,
+      cx:r.x+Math.round(a.x)*s.pixelScale}))};
+  });
+  assert.deepEqual(state.boxes.map(b=>b.id),[actor.id],'hovering a resident pops exactly its own plate');
+  const b=state.boxes[0],body=state.bodies.find(q=>q.id===actor.id),overlaps=(p,q)=>p.x<q.x+q.w&&p.x+p.w>q.x&&p.y<q.y+q.h&&p.y+p.h>q.y;
+  assert(b.x>=0&&b.y>=0&&b.x+b.w<=1920&&b.y+b.h<=1080,'hovered plate stays inside the room');
+  assert(b.y+b.h<=body.y-8,'hovered plate remains above its resident head');
+  if(body.cx-b.w/2>=0&&body.cx+b.w/2<=1920)
+    assert(Math.abs(b.x+b.w/2-body.cx)<=state.scale+1,'hovered plate centers over its resident');
+  for(const q of state.bodies)if(q.id!==actor.id)assert(!overlaps(b,q),'hovered plate never covers another resident');
+  await page.locator('#bar').hover();
+  assert.equal(await page.locator('.nameplate:not([hidden])').count(),0,'the plate collapses when the pointer leaves');
+}
 async function check(page,count) {
   const s=await read(page);assert.equal(s.actors.length,count);assert.equal(s.stations.length,count);
   assert.equal(new Set(s.actors.map(a=>a.sprite)).size,count,'each visible tool has a distinct look');
@@ -22,9 +46,9 @@ async function check(page,count) {
   assert.equal(s.pixelScale,4);assert.equal(s.smoothing,false);
   assert.deepEqual(await page.locator('#game').boundingBox(),{x:0,y:0,width:1920,height:1080});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth||document.documentElement.scrollHeight>innerHeight),false);
-  // A selector union uses document order (header first). Keep labels first
-  // explicitly, so each geometry record matches its resident, including #6.
-  const boxes=await page.locator('.nameplate,#bar,#footer').evaluateAll(els=>[...els].sort((a,b)=>Number(b.classList.contains('nameplate'))-Number(a.classList.contains('nameplate'))).map(el=>{
+  // A resting room shows the status icons only; the plates appear on demand.
+  assert.equal(await page.locator('.nameplate:not([hidden])').count(),0,'a resting room keeps its plates out of the way');
+  const boxes=await page.locator('.nameplate:not([hidden]),#bar,#footer').evaluateAll(els=>[...els].sort((a,b)=>Number(b.classList.contains('nameplate'))-Number(a.classList.contains('nameplate'))).map(el=>{
     const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
   }));
   const overlaps=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
@@ -36,10 +60,6 @@ async function check(page,count) {
   });
   bodies.forEach((b,i)=>bodies.slice(i+1).forEach(q=>assert(!overlaps(b,q),'people do not overlap')));
   for(const a of s.actors)assert(a.walkable,`${a.id} has a reachable position`);
-  for(const d of s.stations)if(d.furniture) {
-    const pixels={x:d.furniture.x*4,y:d.furniture.y*4,w:d.furniture.w*4,h:d.furniture.h*4};
-    boxes.slice(0,count).forEach(b=>assert(!overlaps(b,pixels),'labels do not cover added desks/computers'));
-  }
   // The sprite's transparent corners extend past the legs. Test visible pixels,
   // not a rectangular box that would incorrectly include those empty corners.
   const collisions=await page.evaluate(async()=>{
@@ -84,14 +104,12 @@ async function check(page,count) {
   }
   for(const p of [...s.stations.map(d=>d.seat),...s.spots])
     assert(queue.some(q=>Math.abs(q.x-p.x)<=2&&Math.abs(q.y-p.y)<=2),'stairs connect to every seat and leisure point');
-  // The approved redesign anchors labels above heads, so old background
-  // windows may be behind a label. People and added stations remain protected.
-  for(const [i,b] of boxes.slice(0,count).entries()) {
-    const actor=s.actors[i],head=(Math.round(actor.y)-(actor.mode==='type'?40:34))*4;
-    assert(b.y+b.h<=head-8,'nameplates remain above their resident heads');
-    const cx=Math.round(actor.x)*4;
-    if(cx-b.w/2>=72&&cx+b.w/2<=1864)
-      assert(Math.abs(b.x+b.w/2-cx)<=4,'nameplates center over their resident');
+  // The approved redesign anchors a plate above the head it belongs to, and
+  // only while that resident is hovered or pinned; probe the first and the
+  // last resident, so a crowded room cannot hide a stray plate.
+  if(count) {
+    await probe(page,0);
+    if(count>1)await probe(page,count-1);
   }
   const atlas=JSON.parse(fs.readFileSync(path.join(ROOT,'static/assets/office-atlas.json'),'utf8'));
   for(const a of s.actors)for(const action of ['type','tea','read','sleep'])for(let f=0;f<4;f++)
@@ -99,8 +117,10 @@ async function check(page,count) {
   return s;
 }
 async function capture(page,name) {
+  await page.locator('#bar').hover();
+  assert.equal(await page.locator('.nameplate:not([hidden])').count(),0,'captures record the resting room');
   await page.screenshot({path:path.join(ROOT,'preview',`${name}.png`)});
-  const masks=await page.locator('.nameplate,#bar,#footer').evaluateAll(els=>els.map(el=>{
+  const masks=await page.locator('.nameplate:not([hidden]),#bar,#footer').evaluateAll(els=>els.map(el=>{
     const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
   }));
   fs.writeFileSync(path.join(TMP,`${name}-masks.json`),JSON.stringify(masks));
@@ -129,9 +149,13 @@ async function capture(page,name) {
     } else {
       const base=configured.map(t=>({id:t.id,name:t.name}));
       const extra=Array.from({length:5},(_,i)=>({id:`extra-${i}`,name:`工具 ${i+4}`}));
-      // Fill exactly to capacity: the configured tool count varies, and an earlier
-      // overflow would emit a second capacity warning before the assertion at line 151.
-      let list=[...base,...extra.slice(0,6-base.length)],mode='working',fail=false;
+      // Fill exactly to capacity with tools that hold a seat: the configured
+      // count varies, and an idle catch-all stays in the footer only, so it must
+      // not stand in for a resident here or a second capacity warning would fire
+      // before the overflow assertions below.
+      const FALLBACK=/认不出|未识别|无法识别|未知|unknown|other/i;
+      const seated=base.filter(t=>!FALLBACK.test(`${t.id} ${t.name||''}`));
+      let list=[...seated,...extra.slice(0,6-seated.length)],mode='working',fail=false;
       await context.route('**/api/status',r=>r.fulfill(fail?{status:503,body:'offline'}:
         {json:{ts:1792026000,agents:list.map(t=>({...t,status:mode}))}}));
       await page.goto(`${BASE}/`);await settled(page,6,mode);
@@ -200,6 +224,18 @@ async function capture(page,name) {
       await delayed.goto(`${BASE}/`);await settled(delayed,base.length,'working');
       assert.deepEqual(aborted,[],'a cold process snapshot exceeding 2.5s is allowed to finish');
       await delayed.close();console.log('PASS slow first status response without aborted scans');
+      // A catch-all "cannot tell which service" tool is a fallback, not a
+      // person: it holds a seat only while a session really works there.
+      const fallback={id:'claude-code-other',name:'认不出服务的 Claude Code'};
+      await page.setViewportSize({width:1920,height:1080});await page.waitForTimeout(150);
+      list=[base[0],fallback];mode='idle';await settled(page,1,'idle');s=await check(page,1);
+      assert.deepEqual(s.actors.map(a=>a.id),['codex'],'an idle catch-all keeps out of the room');
+      assert.deepEqual(s.tools.map(t=>t.id),['codex','claude-code-other']);
+      assert.equal(await page.locator('.agent-status').count(),2,'the footer still lists the idle catch-all');
+      mode='working';await settled(page,2,'working');s=await check(page,2);
+      assert.deepEqual(s.actors.map(a=>a.id).sort(),['claude-code-other','codex'],'a busy catch-all earns a seat');
+      console.log('PASS fallback catch-all: footer-only while idle, seated only while its session really works');
+      list=base;await settled(page,base.length,mode);await check(page,base.length);
       console.log('PASS reconnect, reorder, remove, rename, safe text rendering, empty config and repopulation');
     }
     assert.deepEqual(errors,[]);

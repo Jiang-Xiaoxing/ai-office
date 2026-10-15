@@ -1,30 +1,72 @@
 const {BASE}=require('./test-env.cjs');
-﻿/* Regression for readable labels when two residents share a nook. */
+/* Regression for the hover nameplate and the head-level status icon: no
+ * permanent billboard, live tracking while walking, room-bounded plates. */
 const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'D:/tools/PixelAgents/node_modules/playwright');
 const ROOT=path.resolve(__dirname,'..'),TMP=path.join(ROOT,'.browser-tmp');fs.mkdirSync(TMP,{recursive:true});
-async function labelsFit(page) {
-  const rects=await page.locator('.nameplate').evaluateAll(els=>els.map(el=>{const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};}));
-  assert.equal(rects.length,3,'capture only after all three resident labels exist');
-  const size=page.viewportSize();
-  const s=await page.evaluate(()=>window.officeDebug.snapshot()),room=await page.locator('#game').boundingBox();
-  rects.forEach((a,i)=>{
-    assert(a.x>=0&&a.y>=0&&a.x+a.w<=size.width&&a.y+a.h<=size.height);
-    rects.slice(i+1).forEach(b=>assert(!(a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y),'labels overlap'));
-    s.actors.forEach(resident=>{
-      const b={x:room.x+(Math.round(resident.x)-13)*s.pixelScale,
-        y:room.y+(Math.round(resident.y)-(resident.mode==='type'?40:34))*s.pixelScale,
-        w:26*s.pixelScale,h:36*s.pixelScale};
-      assert(!(a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y),'label covers a resident');
+const read=page=>page.evaluate(()=>officeDebug.snapshot());
+const overlap=(a,b,gap=0)=>a.x<b.x+b.w+gap&&a.x+a.w+gap>b.x&&a.y<b.y+b.h+gap&&a.y+a.h+gap>b.y;
+const target=(page,id)=>page.locator(`[data-target="${id}"]`);
+const shown=page=>page.evaluate(()=>{
+  const room=document.getElementById('game').getBoundingClientRect();
+  const s=officeDebug.snapshot();
+  const plates=[...document.querySelectorAll('.nameplate')].filter(el=>!el.hidden).map(el=>{
+    const b=el.getBoundingClientRect();
+    return {id:el.dataset.actor,x:b.x,y:b.y,w:b.width,h:b.height,text:el.textContent};
+  });
+  return {room:{x:room.x,y:room.y,w:room.width,h:room.height},plates,s,
+    bodies:s.actors.map(a=>({id:a.id,x:room.x+(Math.round(a.x)-13)*s.pixelScale,
+      y:room.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,w:26*s.pixelScale,h:36*s.pixelScale,
+      head:room.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,
+      cx:room.x+Math.round(a.x)*s.pixelScale}))};
+});
+async function assertPlates(page,expected) {
+  const {room,plates,s,bodies}=await shown(page);
+  assert.deepEqual([...s.nameplates.visible].sort(),[...expected].sort(),'debug snapshot matches the DOM');
+  assert.deepEqual(plates.map(p=>p.id).sort(),[...expected].sort(),'only the asked-for plates are on screen');
+  plates.forEach((p,i)=>{
+    assert(p.x>=room.x&&p.y>=room.y&&p.x+p.w<=room.x+room.w&&p.y+p.h<=room.y+room.h,
+      'plate stays inside the room: '+JSON.stringify({p,room,scale:s.pixelScale}));
+    plates.slice(i+1).forEach(q=>assert(!overlap(p,q),'plates never overlap'));
+    const body=bodies.find(b=>b.id===p.id);
+    assert(p.y+p.h<=body.head+2,'plate sits above its own head: '+JSON.stringify({p,body}));
+    if(p.x>room.x&&p.x+p.w<room.x+room.w)
+      assert(Math.abs(p.x+p.w/2-body.cx)<=s.pixelScale+1,'plate centres over its resident');
+  });
+  return plates;
+}
+async function assertIcons(page) {
+  const {room,s}=await shown(page);
+  for(const a of s.actors) {
+    assert.equal(a.icon.x,Math.round(a.x)+14,'icon sits just beside the sprite');
+    assert(a.icon.x>=Math.round(a.x)+13||a.icon.x+a.icon.w<=Math.round(a.x)-13,'icon never covers its resident');
+    assert(a.icon.x>=0&&a.icon.y>=0&&a.icon.x+a.icon.w<=s.width&&a.icon.y+a.icon.h<=s.height,
+      'icon stays inside the room grid');
+    const head=room.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale;
+    assert(Math.abs(room.y+a.icon.y*s.pixelScale-head)<=s.pixelScale*3,'icon rides at head height');
+  }
+  // The icon is really painted, and it is painted where the snapshot says.
+  // Below a whole-number zoom the decimated canvas resamples every pixel, so
+  // only the full 480x270 grid can be sampled pixel by pixel.
+  if(s.sample!==1)return [];
+  const painted=await page.evaluate(()=>{
+    const s=officeDebug.snapshot(),c=document.getElementById('game').getContext('2d');
+    return s.actors.map(a=>{
+      const d=c.getImageData(a.icon.x,a.icon.y-4,a.icon.w,a.icon.h+4).data;
+      let gold=0;for(let i=0;i<d.length;i+=4)if(d[i]===255&&d[i+1]===217&&d[i+2]===138)gold++;
+      return {id:a.id,name:a.icon.name,gold};
     });
   });
+  for(const p of painted)assert(p.gold>0,`${p.id} draws its ${p.name} icon`);
+  return painted;
 }
-async function capture(page,name) {
-  assert.equal(await page.locator('.nameplate').count(),3,'capture must include every resident label');
-  const masks=await page.locator('.nameplate,#bar,#footer').evaluateAll(els=>els.map(el=>{
+async function capture(page,name,dir=path.join(ROOT,'preview')) {
+  await page.mouse.move(1900,20);
+  assert.deepEqual((await shown(page)).plates,[],'captures record the resting room');
+  const masks=await page.locator('.nameplate:not([hidden]),#bar,#footer').evaluateAll(els=>els.map(el=>{
     const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
   }));
-  await page.screenshot({path:path.join(ROOT,`preview/${name}.png`)});
+  await page.screenshot({path:path.join(dir,`${name}.png`)});
   fs.writeFileSync(path.join(TMP,`${name}-masks.json`),JSON.stringify(masks));
 }
 (async()=>{
@@ -41,12 +83,65 @@ async function capture(page,name) {
       const s=window.officeDebug?.snapshot();
       return s?.connected&&s.actors.length===3&&s.actors.every(a=>['sleep','tea','read'].includes(a.mode));
     });
-    await labelsFit(page);await capture(page,'attic-idle');
-    mode='working';await page.waitForFunction(()=>{
-      const s=window.officeDebug.snapshot();return s.connected&&s.actors.length===3&&s.actors.every(a=>a.mode==='type');
+    // Resting room: icons only, the parchment plates stay out of the way.
+    await assertPlates(page,[]);
+    const icons=await assertIcons(page);
+    assert.deepEqual(icons.map(i=>i.name).sort(),['book','cup','zzz'],'leisure states own their own icon');
+    await capture(page,'tags-idle',TMP);
+    // Hover pops one plate above its head, leaving it collapses again.
+    await target(page,'resident:codex').hover();
+    let plates=await assertPlates(page,['codex']);
+    assert.match(plates[0].text,/Codex/);assert.match(plates[0].text,/打盹/);
+    assert.match(plates[0].text,/^Codex打盹$/,'a provider-less resident keeps a single-line plate');
+    await target(page,'resident:openrouter').hover();
+    plates=await assertPlates(page,['openrouter']);
+    assert.match(plates[0].text,/Claude CodeOpenRouter喝茶/,'provider stays on its own line');
+    await page.mouse.move(1900,20);
+    await assertPlates(page,[]);
+    // Clicking pins a second plate: the two must not overlap or leave the room.
+    await target(page,'resident:openrouter').click();
+    await page.waitForFunction(()=>document.querySelector('[data-actor="openrouter"]').classList.contains('pinned'));
+    await target(page,'resident:codex').hover();
+    plates=await assertPlates(page,['codex','openrouter']);
+    await page.screenshot({path:path.join(TMP,'tags-hover.png')});
+    // A pinned plate follows the walker instead of waiting at the old desk.
+    mode='working';
+    await page.waitForFunction(()=>officeDebug.snapshot().actors.some(a=>a.mode==='walk'));
+    let tracked=0;
+    for(let i=0;i<12;i++) {
+      const sample=await page.evaluate(()=>{
+        const s=officeDebug.snapshot(),el=document.querySelector('.nameplate:not([hidden])');
+        const b=el.getBoundingClientRect(),room=document.getElementById('game').getBoundingClientRect();
+        const a=s.actors.find(a=>a.id===el.dataset.actor);
+        return {id:a.id,walking:a.mode==='walk',actorX:a.x,plateX:b.x+b.width/2,
+          iconX:a.icon.x,roomX:room.x,scale:s.pixelScale};
+      });
+      if(sample.walking) {
+        tracked++;
+        assert.equal(sample.iconX,Math.round(sample.actorX)+14,'icon follows the walker');
+        assert(Math.abs(sample.plateX-(sample.roomX+Math.round(sample.actorX)*sample.scale))<=sample.scale+1,
+          'pinned plate follows the walker: '+JSON.stringify(sample));
+      }
+      await page.waitForTimeout(60);
+    }
+    assert(tracked>0,'at least one walking sample covered the moving plate');
+    // Clicking the resident again, or any empty spot, puts the plate away.
+    await page.waitForFunction(()=>{
+      const s=window.officeDebug.snapshot();return s.actors.length===3&&s.actors.every(a=>a.mode==='type');
     },null,{timeout:22000});
-    await labelsFit(page);await capture(page,'attic-work');
-    console.log('PASS final desktop idle/work screenshots from latest code');
+    assert(!await page.evaluate(()=>document.elementFromPoint(1200,620)?.dataset?.target?.startsWith('resident:')),
+      'the middle of the floor stays free for a dismissal click');
+    await target(page,'resident:openrouter').click();
+    await assertPlates(page,[]);
+    await target(page,'resident:codex').click();await page.waitForFunction(()=>officeDebug.snapshot().nameplates.visible.length===1);
+    await page.mouse.click(1200,620);await assertPlates(page,[]);
+    await target(page,'resident:codex').click();await page.waitForFunction(()=>officeDebug.snapshot().nameplates.visible.length===1);
+    // Escape collapses a pin; the pointer still resting on the resident keeps it
+    // hovered, so the plate only goes once the mouse steps away too.
+    await page.keyboard.press('Escape');
+    await page.mouse.move(1900,20);await assertPlates(page,[]);
+    await capture(page,'attic-work');
+    console.log('PASS hover/pin plates, walking tracking, dismissal and status icons in motion');
     failing=true;await page.waitForFunction(()=>!window.officeDebug.snapshot().connected);
     const notice=await page.locator('#notice').boundingBox(),footer=await page.locator('#footer').boundingBox();
     assert(notice.y+notice.height<footer.y,'reconnection notice stays above the footer');
@@ -54,8 +149,16 @@ async function capture(page,name) {
     await page.close();mode='idle';
     const mobile=await context.newPage();await mobile.setViewportSize({width:390,height:844});await mobile.goto(`${BASE}/`);
     await mobile.waitForFunction(()=>window.officeDebug?.snapshot().actors.filter(a=>a.mode==='sleep').length>=2,null,{timeout:30000});
-    await labelsFit(mobile);await mobile.screenshot({path:path.join(TMP,'mobile-crowded.png')});
-    console.log('PASS deterministic mobile crowding: two sleeping residents, readable nonoverlapping labels');
+    await assertIcons(mobile);
+    for(const id of ['codex','openrouter','claude-code']) {
+      await target(mobile,`resident:${id}`).click();
+      await assertPlates(mobile,[id]);
+      await target(mobile,`resident:${id}`).click();
+      await mobile.mouse.move(2,2);await assertPlates(mobile,[]);
+    }
+    await mobile.mouse.move(2,2);
+    await mobile.screenshot({path:path.join(TMP,'mobile-crowded.png')});
+    console.log('PASS deterministic mobile crowding: every plate stays inside the narrow room');
     await context.close();
   } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

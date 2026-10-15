@@ -13,7 +13,7 @@ async function setTime(page,timestamp) {
 async function capture(page,name,final=false) {
   await page.screenshot({path:path.join(final?path.join(ROOT,'preview'):TMP,`${name}.png`)});
   if(final) {
-    const masks=await page.locator('.nameplate,#bar,#footer').evaluateAll(els=>els.map(el=>{
+    const masks=await page.locator('.nameplate:not([hidden]),#bar,#footer').evaluateAll(els=>els.map(el=>{
       const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
     }));
     fs.writeFileSync(path.join(TMP,`${name}-masks.json`),JSON.stringify(masks));
