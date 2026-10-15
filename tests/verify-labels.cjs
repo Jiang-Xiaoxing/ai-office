@@ -31,7 +31,7 @@ async function capture(page,name) {
     let mode='idle',failing=false;const context=await browser.newContext({viewport:{width:1920,height:1080},deviceScaleFactor:1});
     await context.route('**/api/status',route=>route.fulfill(failing?{status:503,body:'unavailable'}:
       {json:{ts:Math.floor(Date.now()/1000),agents:['codex','codebuddy','claude-code'].map(id=>({id,status:mode}))}}));
-    await context.addInitScript(()=>{Math.random=()=>.01;});
+    await context.addInitScript(()=>{Math.random=()=>.01;Date.now=()=>Date.parse('2026-10-15T01:00:00Z');});
     const page=await context.newPage();await page.goto('http://127.0.0.1:8889/');
     await page.waitForFunction(()=>window.officeDebug?.snapshot().actors.every(a=>['sleep','tea','read'].includes(a.mode)));
     await labelsFit(page);await capture(page,'attic-idle');

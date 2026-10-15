@@ -2,7 +2,7 @@
 from PIL import Image
 import json
 root = Path(__file__).resolve().parents[1]
-for name in ('attic-idle.png', 'attic-work.png'):
+for name in ('attic-idle.png', 'attic-work.png', 'attic-weather.png'):
     im = Image.open(root / 'preview' / name).convert('RGB')
     assert im.size == (1920, 1080), im.size
     # Run verify-labels.cjs first to capture the HTML overlay bounds for each image.

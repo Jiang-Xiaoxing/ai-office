@@ -17,7 +17,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'D:/tools/PixelAgents/no
     page.on('pageerror',e=>errors.push(e.message));
     const response=await page.goto('http://127.0.0.1:8888/office/',{waitUntil:'networkidle'});
     assert.equal(response.status(),200);await page.waitForFunction(()=>window.officeDebug?.snapshot().connected);
-    for(const suffix of ['static/office.js','static/office.css','static/assets/attic-bg-2.png','static/assets/office-atlas.png','static/assets/office-atlas.json','api/status'])
+    for(const suffix of ['static/weather.js','static/office.js','static/office.css','static/assets/attic-bg-2.png','static/assets/office-atlas.png','static/assets/office-atlas.json','api/status'])
       assert(resources.some(r=>r.path===`/office/${suffix}`&&r.status===200),suffix);
     assert.deepEqual(errors,[]);
     assert.equal((await page.evaluate(()=>window.officeDebug.snapshot())).zoom,4);

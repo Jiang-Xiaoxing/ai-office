@@ -9,6 +9,7 @@ h1 { margin: 0; font-size: 19px; font-weight: 700; white-space: nowrap; letter-s
 .office-icon { width: 22px; height: 19px; display: inline-block; border: 3px solid #dfbd8a; background: #8baaaa; position: relative; }
 .office-icon::before { content: ''; position: absolute; width: 12px; height: 3px; background: #dfbd8a; left: 2px; bottom: -7px; }
 .connection { color: #c6bab7; font-size: 12px; white-space: nowrap; }
+#weather { color: #e7d2a7; padding-right: 12px; border-right: 1px solid #4c625f; }
 .signal { width: 7px; height: 7px; background: #dcba74; }
 .signal.live { background: #a5cbb7; box-shadow: 0 0 0 3px #a5cbb711; }
 .signal.error { background: #e5a48b; }

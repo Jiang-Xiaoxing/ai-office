@@ -20,7 +20,7 @@
     idleSlot: i * 2, idleTime: 14 + i * 2, idleChanges: 0,
   }));
   const ROOM = { w: 480, h: 270 };
-  let atlas, background, metadata, scene, layout, initialized = false, lastTime = 0, clock = 0;
+  let atlas, background, metadata, scene, weather, layout, initialized = false, lastTime = 0, clock = 0;
   let latest = null, polls = 0, connected = false, polling = false;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const rect = (x, y, w, h, color, c = ctx) => {
@@ -65,6 +65,7 @@
     const c=scene.getContext('2d');c.imageSmoothingEnabled=false;
     // The supplied PNG is an exact 4x nearest-neighbor enlargement of this grid.
     c.drawImage(background,0,0,ROOM.w,ROOM.h);
+    weather=AtticWeather.create(scene);
   }
   function walkable(x,y) {
     // Routes may run along a solid edge; discard floating-point movement noise.
@@ -205,7 +206,11 @@
   }
   function render(now) {
     const dt=lastTime?Math.min((now-lastTime)/1000,.08):0;lastTime=now;clock+=dt;
-    updateActors(dt);ctx.drawImage(scene,0,0);
+    updateActors(dt);weather.draw(ctx,Date.now(),reduced.matches);
+    const sky=weather.snapshot(),weatherLabel=document.getElementById('weather');
+    if(weatherLabel.textContent!==sky.name) {
+      weatherLabel.textContent=sky.name;canvas.dataset.weather=sky.kind;updateRoster();
+    }
     layout.desks.forEach((d,i)=>monitor(d,actors[i]));
     const drawables=[];
     actors.forEach(a=>drawables.push({depth:a.y,draw:()=>{
@@ -236,7 +241,7 @@
       name.textContent=a.name;state.textContent=a.requested===null?'连接中':a.requested==='working'?'干活中':'摸鱼中';
       el.append(dot,name,state);roster.append(el);
     }
-    canvas.setAttribute('aria-label',actors.map(a=>`${a.name}${a.subtitle||''}：${a.requested==='working'?'干活中':'摸鱼中'}`).join('；'));
+    canvas.setAttribute('aria-label',`${weather?.snapshot().name||''}阁楼；`+actors.map(a=>`${a.name}${a.subtitle||''}：${a.requested==='working'?'干活中':'摸鱼中'}`).join('；'));
   }
   async function poll() {
     if(polling)return;polling=true;
@@ -254,7 +259,7 @@
           go(a,target,status==='working'?'type':target.action);
         }
       }
-      document.getElementById('ts').textContent=new Date(data.ts*1000).toLocaleTimeString('zh-CN',{hour12:false});
+      document.getElementById('ts').textContent=new Date(data.ts*1000).toLocaleTimeString('zh-CN',{hour12:false,timeZone:'Asia/Shanghai'});
       document.getElementById('connection').textContent='已同步';document.getElementById('signal').className='signal live';
       notice.hidden=true;updateRoster();
     } catch {
@@ -266,6 +271,7 @@
     snapshot:()=>({ready:initialized,connected,polls,clock,zoom:layout?.zoom,width:layout?.w,height:layout?.h,
       sample:layout?.sample,pixelScale:layout?.pixelScale,ox:layout?.ox,oy:layout?.oy,
       background:background?.getAttribute('src'),smoothing:ctx.imageSmoothingEnabled,
+      weather:weather?.snapshot(),
       actors:actors.map(a=>({id:a.id,x:a.x,y:a.y,mode:a.mode,frame:a.frame,dir:a.dir,requested:a.requested,
         idleSlot:a.idleSlot,idleChanges:a.idleChanges,route:a.route.map(p=>({...p})),
         target:initialized?destination(a):null,walkable:initialized?walkable(a.x,a.y):false,
@@ -281,7 +287,7 @@
       const [,,data]=await Promise.all([image.decode(),room.decode(),fetch('static/assets/office-atlas.json').then(r=>{if(!r.ok)throw new Error('Atlas missing');return r.json();})]);
       atlas=image;background=room;metadata=data;createLabels();fit();updateRoster();document.getElementById('loading').hidden=true;
       requestAnimationFrame(render);poll();setInterval(poll,3000);new ResizeObserver(fit).observe(wrap);
-      document.addEventListener('visibilitychange',()=>{lastTime=0;if(!document.hidden)poll();});
+      document.addEventListener('visibilitychange',()=>{lastTime=0;if(!document.hidden){weather.update();poll();}});
     } catch(error) {document.getElementById('loading').textContent='素材加载失败，请刷新页面';console.error(error);}
   }
   start();

@@ -11,7 +11,7 @@
 <body>
 <header id="bar">
   <div class="identity"><span class="office-icon" aria-hidden="true"></span><h1>AI 办公室</h1><span class="owner">姜小星的阁楼工作室</span></div>
-  <div class="connection"><span id="signal" class="signal"></span><span id="connection">正在连接</span><time id="ts">--:--:--</time></div>
+  <div class="connection"><span id="weather" title="按北京时间自动变化的场景天气"></span><span id="signal" class="signal"></span><span id="connection">正在连接</span><time id="ts">--:--:--</time></div>
 </header>
 <main id="wrap" aria-label="温馨阁楼工作室，伙伴们干活时回工位，空闲时看书、喝茶或打盹">
   <canvas id="game" role="img" aria-label="正在布置办公室"></canvas>
@@ -23,6 +23,7 @@
   <div id="roster" aria-label="工具状态"></div>
   <span class="local">仅限本机使用 <span class="refresh">· 每 3 秒同步</span></span>
 </footer>
+<script src="static/weather.js"></script>
 <script src="static/office.js"></script>
 </body>
 </html>

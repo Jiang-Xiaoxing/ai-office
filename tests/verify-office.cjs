@@ -75,6 +75,8 @@ async function watchTravel(page,work) {
   const browser=await chromium.launch({executablePath:process.env.OFFICE_BROWSER||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
     headless:true,env:{...process.env,TEMP:TMP,TMP:TMP},args:['--no-first-run','--disable-background-networking']});
   const context=await browser.newContext({viewport:{width:1920,height:1080},deviceScaleFactor:1});
+  // Keep the existing pixel-identity regression in the unchanged sunny scene.
+  await context.addInitScript(()=>{Date.now=()=>Date.parse('2026-10-15T01:00:00Z');});
   const page=await context.newPage(),errors=[],calls=[],resources=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>resources.push({url:r.url(),status:r.status()}));
   let mode='idle',failing=false;
@@ -137,7 +139,7 @@ async function watchTravel(page,work) {
     console.log('PASS first load with working status walks to work');
     mode='idle';await page.setViewportSize({width:1920,height:1080});
     await page.goto('http://127.0.0.1:8889/office/',{waitUntil:'networkidle'});await arrive(page,false);
-    for(const suffix of ['static/office.js','static/office.css','static/assets/attic-bg-2.png','static/assets/office-atlas.png','static/assets/office-atlas.json','api/status'])
+    for(const suffix of ['static/weather.js','static/office.js','static/office.css','static/assets/attic-bg-2.png','static/assets/office-atlas.png','static/assets/office-atlas.json','api/status'])
       assert(resources.some(r=>r.url.endsWith(`/office/${suffix}`)&&r.status===200),`prefix resource: ${suffix}`);
     assert(calls.some(c=>c.url.endsWith('/office/api/status')));await checkFit(page);
     console.log('PASS /office/ prefix: relative CSS, JS, atlas and API');

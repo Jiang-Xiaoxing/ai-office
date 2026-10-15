@@ -4,6 +4,18 @@
 
 Codex、CodeBuddy、Claude Code（DeepSeek）各有一个原创像素角色。干活时沿家具间的通道走回自己的座位，坐下敲键盘，显示器亮起；空闲时离开工位，在看书、喝茶、打盹之间随机切换。前端每 3 秒读取一次 `api/status`，断线时保留最后一次状态并自动重连。
 
+## 自动天气与光线
+
+天气是阁楼的场景氛围，不接入真实气象数据，不访问第三方服务，也没有手动开关。首次打开立即按**当前北京时间**选择天气，浏览器所在时区不影响选择：
+
+- **06:00–18:00**：每个整点在晴、阴、雨、雪之间轮换。同一天、同一小时的结果固定，刷新页面不会重新抽取。
+- **18:00–次日 06:00**：保持夜晚，天窗显示夜空、星星和月牙，吊灯与落地灯周围呈现暖光。
+- 页面保持打开时，天气变化用 **60 秒平滑过渡**；后台标签页恢复时重新核对时刻。
+
+晴天保持已选背景原图的明亮绿植色彩；阴天降低室内亮度并偏灰；雨天偏暗、偏湿冷，地板有淡淡反光；雪天为冷白光。两扇天窗的玻璃区域使用原生像素遮罩，替换天空时保留窗框与横梁。雨滴、雪花为轻量 Canvas 像素动画，只在窗外显示；系统偏好减少动画时保留静态雨雪。人物、亮屏、标签和状态同步继续使用既有逻辑。
+
+`static/weather.js` 独立处理北京时间、小时选择、渐变权重、天窗遮罩、光线和粒子；不修改 `config/tools.json` 或后端接口。光线图在加载时生成并缓存，绘制仍使用 480×270 像素网格及整数缩放。
+
 ## 本机使用
 
 双击 `start.vbs` 启动，浏览器打开 **http://127.0.0.1:8889/**。双击 `stop.vbs` 停止。脚本以隐藏窗口运行；不会设置开机自启或修改系统代理。
@@ -75,6 +87,8 @@ Codex、CodeBuddy、Claude Code（DeepSeek）各有一个原创像素角色。�
 & 'D:\ai-office\venv\Scripts\python.exe' 'D:\ai-office\tests\test_detectors.py'
 node tests/verify-office.cjs
 node tests/verify-labels.cjs
+node tests/weather-clock.cjs
+node tests/verify-weather.cjs
 & 'D:\AITools\py312\python.exe' 'D:\ai-office\tests\verify_screenshots.py'
 ```
 
@@ -82,7 +96,9 @@ node tests/verify-labels.cjs
 
 第二行中的 `node` 是 JavaScript 运行程序；`tests/verify-office.cjs` 是浏览器验收脚本，应在项目目录执行。脚本启动隐藏的无头 Edge，临时拦截浏览器中的状态请求，验证背景复制一致、人物与屏幕以外超过 12 万个背景像素未被重绘、连续行走、家具碰撞、标签不遮人物且桌面文字不小于 16px、随机休息活动、打字帧、显示器、断线恢复、3 秒刷新、桌面/手机布局及 `/office/` 相对资源。模拟状态不写入后端，生产页面不含模拟开关。
 
-第三行运行标签拥挤场景检查，并覆盖两张最终截图，将文字区域的坐标临时写入 `.browser-tmp/`。第四行使用已有 D 盘 Python 与 Pillow，核对截图为 1920×1080，避开文字区域后逐块验证 4×4 像素无平滑；需接着第三行执行。检查只读本地图片，不访问网络。浏览器关闭并完成图片核对后，可以清理 `.browser-tmp/` 中的临时图和坐标文件。
+第三行运行标签拥挤场景检查，并覆盖两张晴天最终截图，将文字区域的坐标临时写入 `.browser-tmp/`。第四行验证北京时间的清晨、傍晚、跨日与跨年边界、小时内稳定及白天四种天气覆盖。第五行用隐藏无头浏览器验证五种天气、非中国浏览器时区、首次加载与刷新、60 秒渐变、雨雪动画遮罩、减少动画偏好、真实本机状态和小屏适配，并覆盖雨天截图 `attic-weather.png`；模拟时间只注入测试浏览器，不进入生产代码。
+
+最后一行使用已有 D 盘 Python 与 Pillow，核对三张截图为 1920×1080，避开文字区域后逐块验证 4×4 像素无平滑；需接着前面的截图测试执行。检查只读本地图片，不访问网络。浏览器关闭并完成图片核对后，可以清理 `.browser-tmp/` 中的临时图和坐标文件。
 
 浏览器测试默认复用 `D:/tools/PixelAgents/node_modules/playwright` 与系统 Edge；可用环境变量 `PLAYWRIGHT_MODULE`、`OFFICE_BROWSER` 指向其他已有安装。`tests/verify-site.cjs` 可在提供现有小站凭据的进程内环境下，只读验证真实小站反代和登录边界；不生成或保存凭据。
 
@@ -90,6 +106,7 @@ node tests/verify-labels.cjs
 
 - `preview/attic-idle.png`：全部空闲，各自在阁楼休息。
 - `preview/attic-work.png`：全部干活，全部到位、显示器亮起。
+- `preview/attic-weather.png`：雨天天窗、像素雨滴、偏暗湿冷光线与干活状态联动。
 
 手机和失败诊断图仅写入 `.browser-tmp/`，交付前清理；保留 `preview/rpg2.png`、`attic-bg-1.png`、`attic-bg-2.png` 和所有 `*-reject.png` 参考图。
 
@@ -99,10 +116,10 @@ node tests/verify-labels.cjs
 server_app.py          独立 FastAPI 后端，只监听本机 8889
 config/tools.json      工具检测规则清单
 detectors.py           配置校验、规则匹配和扩展接口
-static/                晴天绿植背景、Canvas 场景、样式、六套像素人物
+static/                晴天绿植背景、自动天气与光线、Canvas 场景、样式、六套像素人物
 scripts/draw_assets.py 可复现的原创素材绘制脚本
 tests/                 检测回归与隐藏浏览器验收
-preview/               最终两张截图及保留的背景和历史参考图
+preview/               最终三张截图及保留的背景和历史参考图
 start.vbs / stop.vbs   本机隐藏启停
 requirements*.txt     运行依赖 / 可选素材构建依赖
 ```
