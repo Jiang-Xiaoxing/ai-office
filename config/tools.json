@@ -1,0 +1,28 @@
+{
+  "tools": [
+    {
+      "id": "codex",
+      "name": "Codex",
+      "rules": [
+        { "type": "recent_files", "root": "~/.codex/sessions", "pattern": "*.jsonl", "dated_directories": true, "lookback_days": 3, "active_seconds": 30 },
+        { "type": "process", "names": ["codex.exe", "codex"], "exclude": ["app-server", "exec-server", "mcp-server", "sandbox"] }
+      ]
+    },
+    {
+      "id": "codebuddy",
+      "name": "CodeBuddy",
+      "rules": [
+        { "type": "process", "names": ["node.exe", "node"], "contains_all": ["codebuddy-code", "bin", "codebuddy"] },
+        { "type": "process", "names": ["codebuddy.exe", "codebuddy"] }
+      ]
+    },
+    {
+      "id": "claude-code",
+      "name": "Claude Code (DeepSeek)",
+      "rules": [
+        { "type": "process", "names": ["claude.exe", "claude"] },
+        { "type": "process", "names": ["node.exe", "node"], "contains_all": ["@anthropic-ai", "claude-code"] }
+      ]
+    }
+  ]
+}
