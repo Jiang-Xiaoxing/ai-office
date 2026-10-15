@@ -22,7 +22,9 @@ async function check(page,count) {
   assert.equal(s.pixelScale,4);assert.equal(s.smoothing,false);
   assert.deepEqual(await page.locator('#game').boundingBox(),{x:0,y:0,width:1920,height:1080});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth||document.documentElement.scrollHeight>innerHeight),false);
-  const boxes=await page.locator('.nameplate,#bar,#footer').evaluateAll(els=>els.map(el=>{
+  // A selector union uses document order (header first). Keep labels first
+  // explicitly, so each geometry record matches its resident, including #6.
+  const boxes=await page.locator('.nameplate,#bar,#footer').evaluateAll(els=>[...els].sort((a,b)=>Number(b.classList.contains('nameplate'))-Number(a.classList.contains('nameplate'))).map(el=>{
     const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
   }));
   const overlaps=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
@@ -82,8 +84,15 @@ async function check(page,count) {
   }
   for(const p of [...s.stations.map(d=>d.seat),...s.spots])
     assert(queue.some(q=>Math.abs(q.x-p.x)<=2&&Math.abs(q.y-p.y)<=2),'stairs connect to every seat and leisure point');
-  for(const q of s.protected)for(const b of boxes.slice(0,count))
-    assert(!overlaps(b,{x:q.x*4,y:q.y*4,w:q.w*4,h:q.h*4}),'labels preserve background furniture, lamps, windows and stairs');
+  // The approved redesign anchors labels above heads, so old background
+  // windows may be behind a label. People and added stations remain protected.
+  for(const [i,b] of boxes.slice(0,count).entries()) {
+    const actor=s.actors[i],head=(Math.round(actor.y)-(actor.mode==='type'?40:34))*4;
+    assert(b.y+b.h<=head-8,'nameplates remain above their resident heads');
+    const cx=Math.round(actor.x)*4;
+    if(cx-b.w/2>=72&&cx+b.w/2<=1864)
+      assert(Math.abs(b.x+b.w/2-cx)<=4,'nameplates center over their resident');
+  }
   const atlas=JSON.parse(fs.readFileSync(path.join(ROOT,'static/assets/office-atlas.json'),'utf8'));
   for(const a of s.actors)for(const action of ['type','tea','read','sleep'])for(let f=0;f<4;f++)
     assert(atlas[`${a.sprite}-${action}-0-${f}`],`${a.sprite} has ${action} animation`);
@@ -140,10 +149,14 @@ async function capture(page,name) {
       assert(warnings.some(w=>w.includes('6')&&w.includes('extra-3')&&w.includes('extra-4')),'capacity warning names overflow');
       const polls=(await read(page)).polls;await page.waitForFunction(n=>officeDebug.snapshot().polls>n,polls);
       assert.equal(warnings.length,1,'warning does not repeat every poll');
+      // Eight readable tags can now fit on the wide footer. Exercise real
+      // overflow at the supported narrow viewport rather than forcing a cap.
+      await page.setViewportSize({width:1024,height:600});await page.waitForTimeout(150);
       await page.locator('#roster').evaluate(el=>{el.scrollLeft=el.scrollWidth;});
       assert(await page.locator('#roster').evaluate(el=>el.scrollLeft>0),'overflow footer can scroll');
       const before=(await read(page)).polls;await page.waitForFunction(n=>officeDebug.snapshot().polls>n,before);
       assert(await page.locator('#roster').evaluate(el=>el.scrollLeft>0),'poll preserves footer scroll position');
+      await page.setViewportSize({width:1920,height:1080});await page.waitForTimeout(150);
       console.log('PASS eight tools: six residents and stations, eight footer statuses, one useful console warning');
       fail=true;await page.waitForFunction(()=>!officeDebug.snapshot().connected);assert.equal((await read(page)).actors.length,6);fail=false;
       list=[extra[0],base[2],base[0],base[1]];await settled(page,4,mode);s=await check(page,4);
@@ -160,6 +173,8 @@ async function capture(page,name) {
       const box=await page.locator('#game').boundingBox();
       assert(box.width>0&&box.height>0&&box.x>=0&&box.y>=0&&box.x+box.width<=390&&box.y+box.height<=844);
       assert.equal(await page.locator('.agent-status').count(),100);
+      await page.locator('#roster').evaluate(el=>{el.scrollLeft=el.scrollWidth;});
+      assert(await page.locator('#roster').evaluate(el=>el.scrollLeft>0),'100 narrow-screen statuses remain scrollable');
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth||document.documentElement.scrollHeight>innerHeight),false);
       console.log('PASS 100 tools on a small screen: bounded footer, scrollable statuses and a visible room');
       const delayed=await context.newPage(),aborted=[];

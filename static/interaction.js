@@ -1,14 +1,9 @@
 /* Local, decorative interactions. Never write tool state or interrupt a resident. */
 (() => {
   'use strict';
-  const PLANTS = [
-    {id:'plant-left', name:'左侧绿植', x:34,y:78,w:23,h:31},
-    {id:'plant-center', name:'中央绿植', x:246,y:44,w:32,h:48},
-    {id:'plant-right', name:'右下绿植', x:443,y:182,w:25,h:48},
-  ];
-  const TABLE = {id:'tea-table',name:'茶桌',x:54,y:210,w:31,h:18};
   const LIFE = 2600, COOLDOWN = 3200;
-  function create({canvas, getActors, getLayout, isConnected}) {
+  function create({canvas, getActors, getLayout, isConnected, zones}) {
+    const PLANTS=zones.plants, TABLE=zones.teaTable;
     const layer=document.getElementById('interaction-targets');
     const note=document.getElementById('interaction-note');
     const heading=note.querySelector('strong'),message=note.querySelector('span');
@@ -42,19 +37,16 @@
       if(available(`resident:${id}`,now))addEffect({id:`resident:${id}`,type:'heart',actor:id},now);
     }
     function water(plantId) {
+      const p=PLANTS.find(p=>p.id===plantId);if(!p)return;
       const now=performance.now();selected=null;
-      const targets=PLANTS.filter(p=>!plantId||p.id===plantId);
-      let count=0;
-      for(const p of targets)if(available(p.id,now)) {
-        addEffect({id:p.id,type:'water',x:p.x+p.w/2,y:p.y+9},now);count++;
-      }
-      say(count?(plantId?targets[0].name:'绿植喝到水啦'):'刚刚浇过啦',
-        count?'水滴落下，叶子精神了一点。':'等水慢慢吸收，一会儿再来吧。','water',now);
+      const ready=available(p.id,now);
+      if(ready)addEffect({id:p.id,type:'water',x:p.x+p.w/2,y:p.y+9},now);
+      say(ready?p.name:'刚刚浇过啦',ready?'水滴落下，叶子精神了一点。':'等水慢慢吸收，一会儿再来吧。','water',now);
     }
     function tea() {
       const now=performance.now();selected=null;
       if(available(TABLE.id,now)) {
-        addEffect({id:TABLE.id,type:'tea',x:68,y:214},now);
+        addEffect({id:TABLE.id,type:'tea',x:TABLE.effectX??TABLE.x+TABLE.w/2,y:TABLE.effectY??TABLE.y+4},now);
         say('茶泡好啦','热茶放在桌上，忙完了再慢慢喝。','tea',now);
       } else say('茶还温着呢','先歇一口气，一会儿再续上。','tea',now);
     }
@@ -81,6 +73,8 @@
       const ids=new Set([...PLANTS.map(p=>p.id),TABLE.id]);
       for(const a of getActors()) {
         const id=`resident:${a.id}`;ids.add(id);
+        a.label?.classList.toggle('selected',selected===a.id);
+        a.label?.classList.toggle('keyboard-focused',document.activeElement?.dataset.target===id&&document.activeElement.matches(':focus-visible'));
         const status=a.requested==='working'?'干活中':a.requested==='idle'?'摸鱼中':'连接中';
         position(button(id,`${a.rosterName}：${status}${isConnected()?'':'（上次状态）'}，点击打招呼`,()=>greet(a.id),true),
           {x:Math.round(a.x)-13,y:Math.round(a.y)-(a.mode==='type'?40:34),w:26,h:36},l);
@@ -115,8 +109,6 @@
         }
       }
     }
-    document.getElementById('water-plants').addEventListener('click',()=>water());
-    document.getElementById('brew-tea').addEventListener('click',tea);
     note.querySelector('button').addEventListener('click',dismiss);
     canvas.addEventListener('click',dismiss);
     document.addEventListener('keydown',event=>{if(event.key==='Escape')dismiss();});

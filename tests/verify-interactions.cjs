@@ -56,18 +56,18 @@ async function settled(page,count=3,mode='type') {
     assert.match(await page.locator('#interaction-note strong').textContent(),/OpenRouter/);
     await page.keyboard.press('Escape');assert.equal(await page.locator('#interaction-note').isVisible(),false);
     await page.waitForFunction(()=>officeDebug.snapshot().interactions.effects.length===0,null,{timeout:4000});
-    await page.locator('#water-plants').focus();await page.keyboard.press('Space');
-    s=await read(page);assert.equal(s.interactions.effects.filter(e=>e.type==='water').length,3);
+    await target(page,'plant-left').focus();await page.keyboard.press('Space');
+    s=await read(page);assert.equal(s.interactions.effects.filter(e=>e.type==='water').length,1);
     await capture(page,'interaction-watering');
-    await page.locator('#water-plants').click();
+    await target(page,'plant-left').click();
     assert.match(await page.locator('#interaction-note strong').textContent(),/刚刚浇过/);
-    assert.equal((await read(page)).interactions.effects.filter(e=>e.type==='water').length,3);
+    assert.equal((await read(page)).interactions.effects.filter(e=>e.type==='water').length,1);
     await page.waitForFunction(()=>officeDebug.snapshot().interactions.effects.length===0,null,{timeout:4000});
-    await page.locator('#brew-tea').click();
+    await target(page,'tea-table').click();
     assert.match(await page.locator('#interaction-note strong').textContent(),/茶泡好/);
     assert((await read(page)).interactions.effects.some(e=>e.type==='tea'));
     await capture(page,'interaction-tea');
-    for(let i=0;i<10;i++)await page.locator('#brew-tea').click();
+    for(let i=0;i<10;i++)await target(page,'tea-table').click();
     assert.match(await page.locator('#interaction-note strong').textContent(),/还温/);
     assert((await read(page)).interactions.effects.length<=8,'rapid clicks stay bounded');
     await page.waitForFunction(()=>officeDebug.snapshot().interactions.effects.length===0,null,{timeout:4000});
@@ -77,9 +77,9 @@ async function settled(page,count=3,mode='type') {
     await page.locator('#interaction-note button').click();
     await page.waitForTimeout(3300);await target(page,'tea-table').click();
     assert.match(await page.locator('#interaction-note strong').textContent(),/茶泡好/);
-    // Native Tab order can reach both toolbar and scene buttons.
-    await page.locator('#brew-tea').focus();await page.keyboard.press('Tab');
-    assert.equal(await page.evaluate(()=>document.activeElement.dataset.target),'plant-left');
+    // Native Tab order reaches scenery and resident buttons without toolbar actions.
+    await target(page,'tea-table').focus();await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(()=>document.activeElement.dataset.target),'resident:codex');
     console.log('PASS pointer, keyboard, cooldowns, bounded effects, live typing and all scenery entrances');
     await target(page,'resident:codex').click();
     mode='idle';await page.waitForFunction(()=>officeDebug.snapshot().actors[0].requested==='idle'&&document.querySelector('#interaction-note strong').textContent.includes('摸鱼中'));
@@ -103,7 +103,7 @@ async function settled(page,count=3,mode='type') {
     await target(page,'plant-right').click();assert.match(await page.locator('#interaction-note strong').textContent(),/右下绿植/);
     const note=await page.locator('#interaction-note').boundingBox();assert(note.x>=0&&note.x+note.width<=390);
     await page.setViewportSize({width:1920,height:1080});await page.waitForTimeout(150);
-    await page.emulateMedia({reducedMotion:'reduce'});await page.locator('#brew-tea').click();
+    await page.emulateMedia({reducedMotion:'reduce'});await target(page,'tea-table').click();
     assert((await read(page)).interactions.effects.some(e=>e.type==='tea'));
     await page.mouse.move(0,0);
     const pixels=()=>page.locator('#game').evaluate(canvas=>Array.from(canvas.getContext('2d').getImageData(65,201,16,20).data));
@@ -111,7 +111,7 @@ async function settled(page,count=3,mode='type') {
     await page.waitForFunction(()=>!officeDebug.snapshot().interactions.visible,null,{timeout:7000});
     console.log('PASS small-screen fit, scaled hit targets, reduced motion and auto-dismiss');
     const prefixed=await context.newPage();await prefixed.goto(`${BASE}/office/`);
-    await settled(prefixed,1);await prefixed.locator('#brew-tea').click();
+    await settled(prefixed,1);await target(prefixed,'tea-table').click();
     assert.match(await prefixed.locator('#interaction-note strong').textContent(),/茶泡好/);await prefixed.close();
     // Fresh context: night weather plus tea still use the unchanged lighting engine.
     const nightContext=await browser.newContext({viewport:{width:1920,height:1080},deviceScaleFactor:1});
@@ -119,7 +119,7 @@ async function settled(page,count=3,mode='type') {
     await nightContext.route('**/api/status',r=>r.fulfill({json:{ts:Date.parse('2026-10-15T12:00:00Z')/1000,agents:ids.slice(0,3).map((id,i)=>({id,name:tools[i],status:'working'}))}}));
     const night=await nightContext.newPage();night.on('pageerror',e=>errors.push(e.message));
     await night.goto(`${BASE}/`);await settled(night);assert.equal((await read(night)).weather.kind,'night');
-    await night.locator('#brew-tea').click();await capture(night,'interaction-night');await nightContext.close();
+    await target(night,'tea-table').click();await capture(night,'interaction-night');await nightContext.close();
     assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
     console.log('PASS /office/ relative resources, night ambience and no external requests/errors');
   } catch(e) {

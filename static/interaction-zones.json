@@ -1,0 +1,10 @@
+{
+  "coordinateSpace": {"width": 480, "height": 270},
+  "background": "attic-bg-2.png",
+  "plants": [
+    {"id":"plant-left", "name":"左侧绿植", "x":34, "y":78, "w":23, "h":31},
+    {"id":"plant-center", "name":"中央绿植", "x":246, "y":44, "w":32, "h":48},
+    {"id":"plant-right", "name":"右下绿植", "x":443, "y":182, "w":25, "h":48}
+  ],
+  "teaTable": {"id":"tea-table", "name":"茶桌", "x":54, "y":210, "w":31, "h":18, "effectX":68, "effectY":214}
+}

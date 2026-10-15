@@ -13,3 +13,11 @@ server.log
 wb-out.txt
 wb.pid
 .browser-tmp/
+
+# Operator task prompts, runner logs and discarded references
+task[0-9]*.txt
+task*-log.txt.done.json
+run-task*.cmd
+_chk.py
+ui-complaint.png
+preview/attic-bg-1.png

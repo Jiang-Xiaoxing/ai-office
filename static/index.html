@@ -3,28 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI 办公室 · 姜小星</title>
-<meta name="theme-color" content="#233b47">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23203c45' d='M0 0h32v32H0z'/%3E%3Cpath fill='%23dfbb77' d='M5 7h22v15H5zM8 25h16v3H8z'/%3E%3Cpath fill='%2367b5ad' d='M8 10h16v9H8z'/%3E%3C/svg%3E">
+<title>暖灯小阁 · 阁楼工作室</title>
+<meta name="theme-color" content="#493b37">
+<link rel="icon" type="image/png" sizes="16x16" href="static/assets/attic-icon-16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="static/assets/attic-icon-32.png">
+<link rel="shortcut icon" href="static/assets/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="static/assets/attic-icon-180.png">
 <link rel="stylesheet" href="static/office.css">
 </head>
 <body>
 <header id="bar">
-  <div class="identity"><span class="office-icon" aria-hidden="true"></span><h1>AI 办公室</h1><span class="owner">姜小星的阁楼工作室</span></div>
-  <div class="interaction-tools" aria-label="阁楼互动"><button id="water-plants" type="button" title="给三盆绿植浇水；也可以直接点击盆栽">浇水</button><button id="brew-tea" type="button" title="在左下茶桌泡一壶茶">泡茶</button></div>
+  <div class="identity"><img class="office-icon" src="static/assets/attic-icon-48.png" alt="" width="40" height="40"><h1>暖灯小阁</h1><span class="owner">阁楼工作室</span></div>
+  <p class="interaction-hint" aria-label="阁楼互动提示"><span><img src="static/assets/ui-water.svg" alt="" width="24" height="24">点花盆浇水</span><span><img src="static/assets/ui-tea.svg" alt="" width="24" height="24">点茶桌泡茶</span></p>
   <div class="connection"><span id="weather" title="按北京时间自动变化的场景天气"></span><span id="signal" class="signal"></span><span id="connection">正在连接</span><time id="ts">--:--:--</time></div>
 </header>
 <main id="wrap" aria-label="温馨阁楼工作室，伙伴们干活时回工位，空闲时看书、喝茶或打盹">
-  <canvas id="game" role="img" aria-label="正在布置办公室"></canvas>
+  <canvas id="game" role="img" aria-label="正在布置暖灯小阁"></canvas>
   <div id="labels" aria-hidden="true"></div>
   <div id="interaction-targets" aria-label="点击伙伴打招呼，点击盆栽浇水，点击茶桌泡茶"></div>
   <div id="interaction-note" role="status" aria-live="polite" aria-atomic="true" hidden><div><strong></strong><span></span></div><button type="button" aria-label="收起互动消息" title="收起（Escape）">×</button></div>
-  <div id="loading" role="status">正在布置办公室…</div>
+  <div id="loading" role="status">正在点亮小阁…</div>
   <div id="notice" role="status" hidden></div>
 </main>
 <footer id="footer">
   <div id="roster" aria-label="工具状态"></div>
-  <span class="local">仅限本机使用 <span class="refresh">· 每 3 秒同步</span></span>
 </footer>
 <script src="static/weather.js"></script>
 <script src="static/interaction.js"></script>

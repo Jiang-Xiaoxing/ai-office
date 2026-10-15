@@ -30,7 +30,7 @@ async function checkFit(page) {
     const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
   }));
   const overlaps=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
-  const text=await page.locator('h1,.owner,#weather,#connection,#ts,.agent-status,.agent-status em,.local,.refresh').evaluateAll(els=>els.map(el=>{
+  const text=await page.locator('h1,.owner,#weather,#connection,#ts,.agent-status,.agent-status em,.local,.refresh').evaluateAll(els=>els.filter(el=>el.getClientRects().length).map(el=>{
     const b=el.getBoundingClientRect();return {size:parseFloat(getComputedStyle(el).fontSize),x:b.x,y:b.y,w:b.width,h:b.height};
   }));
   for(const t of text) {
@@ -41,7 +41,7 @@ async function checkFit(page) {
     assert.equal(s.zoom,4);assert.equal(s.sample,1);assert.equal(s.pixelScale,4);
     assert.deepEqual(box,{x:0,y:0,width:1920,height:1080},'4x canvas fills one screen');
     assert.equal(await page.locator('h1').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),28);
-    assert(bars[0].h<=44&&bars[1].h<=36,'desktop bars stay thin');
+    assert.equal(bars[0].h,56,'desktop timber header');assert.equal(bars[1].h,48,'readable status tags');
   }
   for(const a of s.actors)assert(a.walkable,`${a.id} blocked ${a.x},${a.y}`);
   for(const p of s.spots)assert(p.walkable,`leisure destination blocked ${p.x},${p.y}`);

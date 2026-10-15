@@ -130,7 +130,7 @@
       createLabels();
     }
     const excess=tools.slice(CAPACITY).map(t=>t.id).join(',');
-    if(excess&&excess!==overflowNotice)console.warn(`AI 办公室最多显示 ${CAPACITY} 人；其余工具仅在底栏显示：${excess}`);
+    if(excess&&excess!==overflowNotice)console.warn(`暖灯小阁最多显示 ${CAPACITY} 人；其余工具仅在底栏显示：${excess}`);
     overflowNotice=excess;
   }
   function walkable(x,y) {
@@ -198,11 +198,14 @@
     if(initialized&&canvas.width===w&&canvas.height===h&&layout.zoom===zoom&&
       layout.viewportWidth===ww&&layout.viewportHeight===wh)return;
     canvas.width=w;canvas.height=h;canvas.style.width=`${w*zoom}px`;canvas.style.height=`${h*zoom}px`;
-    const ox=Math.floor((ww-w*zoom)/2),oy=Math.floor((wh-h*zoom)/2);
+    const ox=Math.floor((ww-w*zoom)/2/zoom)*zoom,oy=Math.floor((wh-h*zoom)/2/zoom)*zoom;
     canvas.style.left=`${ox}px`;canvas.style.top=`${oy}px`;
     ctx.imageSmoothingEnabled=false;ctx.setTransform(1/sample,0,0,1/sample,0,0);
     if(!initialized){layout=roomLayout();buildScene();}
     Object.assign(layout,{zoom,sample,pixelScale,ox,oy,viewportWidth:ww,viewportHeight:wh});
+    document.body.dataset.density=pixelScale>=3?'normal':pixelScale>=1.5?'compact':'tiny';
+    for(const a of actors)if(a.label){a.label.style.width='';a.label.style.height='';}
+    labels.layoutKey=null;
     // Resizing only changes projection; do not teleport residents or interrupt a walk.
     if(!initialized)actors.forEach(a=>{
       const target=destination(a),p=nearestFree(target);
@@ -244,48 +247,84 @@
     for(const a of actors) {
       const el=a.label;
       const state=a.requested===null?'连接中':ACTIVITIES[a.mode]||'歇一会';
-      if(el.lastElementChild.textContent!==state)el.lastElementChild.textContent=state;
+      if(el.lastElementChild.textContent!==state) {
+        el.lastElementChild.textContent=state;el.style.width='';el.style.height='';labels.layoutKey=null;
+      }
       el.classList.toggle('working',a.requested==='working');
     }
     const ww=wrap.clientWidth,wh=wrap.clientHeight,scale=layout.pixelScale;
-    // Desktop bars overlay the room edges; wrapped mobile bars occupy their own rows.
+    const grid=Math.max(1,scale),gap=Math.max(8,grid*2);
+    const up=n=>Math.ceil(n/grid)*grid,down=n=>Math.floor(n/grid)*grid;
     const room=wrap.getBoundingClientRect();
-    const top=Math.max(0,document.getElementById('bar').getBoundingClientRect().bottom-room.top)+6;
-    const bottom=Math.min(wh,document.getElementById('footer').getBoundingClientRect().top-room.top)-6;
+    // Nameplates belong to the room, even when an integer zoom leaves a surround.
+    const bounds={
+      left:up(layout.ox+(scale<1?0:18*scale)),right:down(layout.ox+(scale<1?480:466)*scale),
+      top:up(Math.max(layout.oy+(scale<1?0:10*scale),document.getElementById('bar').getBoundingClientRect().bottom-room.top+gap)),
+      bottom:down(Math.min(layout.oy+248*scale,document.getElementById('footer').getBoundingClientRect().top-room.top-gap)),
+    };
     const bodies=actors.map(a=>({x:layout.ox+(Math.round(a.x)-13)*scale-3,
       y:layout.oy+(Math.round(a.y)-(a.mode==='type'?40:34))*scale-3,
       w:26*scale+6,h:36*scale+6}));
-    const overlaps=(p,q)=>p.x<q.x+q.w+3&&p.x+p.w+3>q.x&&p.y<q.y+q.h+3&&p.y+p.h+3>q.y;
-    const plates=actors.map(a=>({a,w:a.label.offsetWidth,h:a.label.offsetHeight,
-      cx:layout.ox+Math.round(a.x)*scale,y:layout.oy+(Math.round(a.y)+2)*scale+12}));
-    // Typing frames change the sprite, not its bounds. Reuse placement while
-    // everyone is still, rather than solve the same furniture avoidance at 60Hz.
-    const key=[ww,wh,scale,top,bottom,...actors.flatMap((a,i)=>[
+    const overlaps=(p,q)=>p.x<q.x+q.w+gap&&p.x+p.w+gap>q.x&&p.y<q.y+q.h+gap&&p.y+p.h+gap>q.y;
+    const plates=actors.map(a=>{
+      const el=a.label;el.style.maxWidth=`${bounds.right-bounds.left}px`;
+      const w=up(el.offsetWidth);el.style.width=`${w}px`;
+      return {a,w,h:up(el.offsetHeight),cx:layout.ox+Math.round(a.x)*scale,
+        y:layout.oy+(Math.round(a.y)-(a.mode==='type'?40:34))*scale-gap-up(el.offsetHeight)};
+    });
+    // Re-solve only when geometry changes, not on each animation frame.
+    const key=[ww,wh,scale,...Object.values(bounds),...actors.flatMap((a,i)=>[
       Math.round(a.x),Math.round(a.y),a.mode,plates[i].w,plates[i].h])].join('|');
     if(labels.layoutKey===key)return;labels.layoutKey=key;
     const furniture=layout.protected.map(d=>({
       x:layout.ox+d.x*scale,y:layout.oy+d.y*scale,w:d.w*scale,h:d.h*scale}));
-    const placed=[];
-    for(const p of plates.sort((a,b)=>a.y-b.y||a.a.index-b.a.index)) {
-      const clampX=x=>Math.max(2,Math.min(ww-p.w-2,x));
-      const x=clampX(p.cx-p.w/2);
-      const desired=Math.min(bottom-p.h,p.y);
-      const obstacles=[...bodies,...furniture,...placed];
-      const ys=[desired,...obstacles.flatMap(q=>[q.y+q.h+6,q.y-p.h-6])];
-      const xs=[x,...obstacles.flatMap(q=>[clampX(q.x-p.w-6),clampX(q.x+q.w+6)])];
-      const free=xs.flatMap(x=>ys.map(y=>({x,y,w:p.w,h:p.h}))).filter(r=>r.y>=top&&r.y+r.h<=bottom&&
-        !obstacles.some(q=>overlaps(r,q)));
-      const cost=r=>Math.hypot(r.x-x,r.y-desired);
-      const best=free.sort((a,b)=>cost(a)-cost(b))[0]??{x,y:desired,w:p.w,h:p.h};
-      p.a.label.style.left=`${best.x+p.w/2}px`;p.a.label.style.top=`${best.y}px`;placed.push(best);
+    const addedFurniture=layout.desks.filter(d=>d.furniture).map(({furniture:d})=>({
+      x:layout.ox+d.x*scale,y:layout.oy+d.y*scale,w:d.w*scale,h:d.h*scale}));
+    // Preserve residents' vertical order so crowded cards remain easy to identify.
+    const ordered=plates.sort((a,b)=>a.y-b.y||b.w*b.h-a.w*a.h||a.a.index-b.a.index);
+    function solve(avoidFurniture,centered=true) {
+      const fixed=avoidFurniture?[...bodies,...furniture]:[...bodies,...addedFurniture],placed=[];
+      let budget=1200;
+      function place(index) {
+        if(index===ordered.length)return true;
+        if(--budget<0)return false;
+        const p=ordered[index],clampX=x=>Math.max(bounds.left,Math.min(bounds.right-p.w,down(x)));
+        const clampY=y=>Math.max(bounds.top,Math.min(bounds.bottom-p.h,down(y)));
+        const desired={x:clampX(p.cx-p.w/2),y:clampY(p.y)};
+        const obstacles=[...fixed,...placed];
+        const xs=new Set(centered?[desired.x]:[desired.x,bounds.left,bounds.right-p.w,...obstacles.flatMap(q=>[clampX(q.x-p.w-gap),clampX(up(q.x+q.w+gap))])]);
+        const ys=new Set([desired.y,bounds.top,bounds.bottom-p.h,...obstacles.flatMap(q=>[clampY(q.y-p.h-gap),clampY(up(q.y+q.h+gap))])]);
+        const candidates=[];
+        for(const x of xs)for(const y of ys) {
+          const r={x,y,w:p.w,h:p.h};
+          if(r.x>=bounds.left&&r.x+r.w<=bounds.right&&r.y>=bounds.top&&r.y+r.h<=bounds.bottom&&(!centered||r.y<=desired.y)&&
+            !obstacles.some(q=>overlaps(r,q)))candidates.push(r);
+        }
+        candidates.sort((a,b)=>Math.hypot(a.x-desired.x,a.y-desired.y)-Math.hypot(b.x-desired.x,b.y-desired.y));
+        for(const r of candidates.slice(0,24)) {
+          placed.push(r);if(place(index+1))return true;placed.pop();
+        }
+        return false;
+      }
+      return place(0)?placed:null;
     }
+    // Head anchoring takes precedence over original background details.
+    // Residents, added stations, room bounds and label spacing are hard constraints.
+    const placed=solve(true)||solve(false)||solve(false,false);
+    if(!placed){labels.layoutKey=null;return;}
+    ordered.forEach((p,i)=>{
+      const r=placed[i];p.a.label.style.left=`${r.x}px`;p.a.label.style.top=`${r.y}px`;
+      p.a.label.style.height=`${r.h}px`;
+      p.a.label.style.setProperty('--pointer-x',`${Math.max(8,Math.min(p.w-8,p.cx-r.x))}px`);
+    });
   }
   function render(now) {
     const dt=lastTime?Math.min((now-lastTime)/1000,.08):0;lastTime=now;clock+=dt;
     updateActors(dt);weather.draw(ctx,Date.now(),reduced.matches);
     const sky=weather.snapshot(),weatherLabel=document.getElementById('weather');
     if(weatherLabel.textContent!==sky.name) {
-      weatherLabel.textContent=sky.name;canvas.dataset.weather=sky.kind;updateRoster();
+      weatherLabel.textContent=sky.name;canvas.dataset.weather=sky.kind;
+      document.body.dataset.time=sky.kind==='night'?'night':'day';updateRoster();
     }
     layout.desks.forEach((d,i)=>monitor(d,actors[i]));
     const drawables=[];
@@ -305,7 +344,7 @@
     labels.replaceChildren();labels.layoutKey=null;
     for(const a of actors) {
       const el=document.createElement('div');el.className='nameplate';el.style.setProperty('--agent-color',a.color);
-      el.title=a.rosterName;
+      el.title=a.rosterName;el.dataset.actor=a.id;
       const name=document.createElement('strong');name.textContent=a.name;
       el.append(name);
       if(a.subtitle){const sub=document.createElement('small');sub.textContent=a.subtitle;el.append(sub);}
@@ -319,7 +358,7 @@
       const a=actors.find(a=>a.id===t.id),color=a?.color||residents[i%residents.length].shirt;
       const el=document.createElement('span');el.className='agent-status';
       const dot=document.createElement('i'),name=document.createElement('span'),state=document.createElement('em');
-      el.style.setProperty('--agent-color',color);
+      el.style.setProperty('--agent-color',color);el.style.setProperty('--status-color',t.status==='working'?'#b9d59c':'#edc57e');
       name.textContent=t.name||t.id;state.textContent=t.status==='working'?'干活中':'摸鱼中';
       el.append(dot,name,state);roster.append(el);
     }
@@ -350,7 +389,7 @@
       notice.hidden=true;updateRoster();
     } catch {
       connected=false;document.getElementById('connection').textContent='正在重连';document.getElementById('signal').className='signal error';
-      notice.textContent=latest?'暂时无法同步，保留上次状态 · 正在重连':'无法连接办公室 · 正在重连';notice.hidden=false;
+      notice.textContent=latest?'暂时无法同步，保留上次状态 · 正在重连':'无法连接小阁 · 正在重连';notice.hidden=false;
     } finally {polling=false;}
   }
   Object.defineProperty(window,'officeDebug',{value:Object.freeze({
@@ -372,9 +411,17 @@
       const image=new Image();image.src='static/assets/office-atlas.png';
       const room=new Image();room.src='static/assets/attic-bg-2.png';
       const json=url=>fetch(url).then(r=>{if(!r.ok)throw new Error(`Missing ${url}`);return r.json();});
-      const [,,data,looks]=await Promise.all([image.decode(),room.decode(),json('static/assets/office-atlas.json'),json('static/assets/residents.json')]);
+      const [,,data,looks,zones]=await Promise.all([image.decode(),room.decode(),json('static/assets/office-atlas.json'),json('static/assets/residents.json'),json('static/interaction-zones.json')]);
+      if(zones.coordinateSpace?.width!==ROOM.w||zones.coordinateSpace?.height!==ROOM.h||!Array.isArray(zones.plants)||!zones.teaTable)throw new Error('Invalid interaction zones');
+      const zoneIds=new Set();
+      for(const z of [...zones.plants,zones.teaTable]) {
+        if(typeof z.id!=='string'||!z.id||zoneIds.has(z.id)||typeof z.name!=='string'||
+          !['x','y','w','h'].every(k=>Number.isFinite(z[k]))||z.x<0||z.y<0||z.w<=0||z.h<=0||
+          z.x+z.w>ROOM.w||z.y+z.h>ROOM.h)throw new Error('Invalid interaction zone');
+        zoneIds.add(z.id);
+      }
       atlas=image;background=room;metadata=data;residents=looks;fit();
-      interaction=AtticInteractions.create({canvas,getActors:()=>actors,getLayout:()=>layout,isConnected:()=>connected});
+      interaction=AtticInteractions.create({canvas,getActors:()=>actors,getLayout:()=>layout,isConnected:()=>connected,zones});
       await poll();updateRoster();document.getElementById('loading').hidden=true;
       requestAnimationFrame(render);setInterval(poll,3000);new ResizeObserver(fit).observe(wrap);
       document.addEventListener('visibilitychange',()=>{lastTime=0;if(!document.hidden){weather.update();poll();}});

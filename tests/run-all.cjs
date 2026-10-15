@@ -34,7 +34,7 @@ async function run(command,args,env) {
   const lifecycleOnly=process.argv.includes('--lifecycle-only');
   if(!lifecycleOnly)fs.writeFileSync(path.join(TMP,'acceptance.log'),'');
   // Existing tests refresh three historical screenshots. Restore their exact input bytes.
-  const saved=new Map(['attic-idle.png','attic-work.png','attic-weather.png'].map(name=>{
+  const saved=new Map(['attic-idle.png','attic-work.png','attic-weather.png','attic-six.png','interaction-greeting.png','interaction-watering.png','interaction-tea.png','interaction-night.png'].map(name=>{
     const file=path.join(ROOT,'preview',name);return [file,fs.readFileSync(file)];
   }));
   let service,serviceClosed,serviceURL,gateway,log;
@@ -70,10 +70,12 @@ async function run(command,args,env) {
       OFFICE_SITE_AUTH:auth,TEMP:TMP,TMP:TMP,PYTHONDONTWRITEBYTECODE:'1'};
     console.log(`Temporary checkout service: ${BASE} (hidden, loopback only)`);
     await run(PYTHON,['tests/test_detectors.py'],env);
-    for(const name of ['weather-clock','verify-office','verify-labels','verify-weather','verify-dynamic','verify-site','verify-interactions'])
+    await run(process.env.OFFICE_ART_PYTHON||'D:/AITools/py312/python.exe',['tests/verify_icon.py'],env);
+    for(const name of ['weather-clock','verify-office','verify-labels','verify-weather','verify-dynamic','verify-site','verify-interactions','verify-zones','verify-ui'])
       await run(process.execPath,[`tests/${name}.cjs`],env);
     await run(PYTHON,['tests/verify_screenshots.py'],env);
     await run(PYTHON,['tests/verify_screenshots.py','interaction-greeting.png','interaction-watering.png','interaction-tea.png','interaction-night.png'],env);
+    await run(PYTHON,['tests/verify_screenshots.py','ui-day.png','ui-night.png'],env);
     console.log('PASS all existing and interaction checks (site check uses isolated authenticated fixture)');
   } finally {
     if(gateway)await close(gateway);

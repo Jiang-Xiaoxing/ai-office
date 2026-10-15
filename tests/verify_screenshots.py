@@ -25,8 +25,10 @@ for name in sys.argv[1:] or ('attic-idle.png', 'attic-work.png', 'attic-weather.
     bad = checked = 0
     for y in range(0, 1080, 4):
         for x in range(0, 1920, 4):
-            if any(x < b['x']+b['w']+1 and x+4 > b['x']-1 and
-                   y < b['y']+b['h']+1 and y+4 > b['y']-1 for b in masks):
+            # The HTML UI has a 2px focus rim and a stepped pointer/shadow
+            # extending 8px below. Match those extents without hiding extra art.
+            if any(x < b['x']+b['w']+2 and x+4 > b['x']-2 and
+                   y < b['y']+b['h']+8 and y+4 > b['y']-2 for b in masks):
                 continue
             checked += 1
             color = pixels[x, y]
