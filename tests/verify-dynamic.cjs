@@ -1,3 +1,4 @@
+const {BASE}=require('./test-env.cjs');
 /* Config-driven residents, capacity, and real restarted-service screenshot acceptance. */
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'D:/tools/PixelAgents/node_modules/playwright');
@@ -65,8 +66,8 @@ async function capture(page,name) {
     const live=process.argv.includes('--live5')?5:process.argv.includes('--live3')?3:0;
     if(live) {
       assert.equal(configured.length,live);
-      await page.goto('http://127.0.0.1:8889/');await settled(page,live);
-      const s=await check(page,live),api=await page.request.get('http://127.0.0.1:8889/api/status').then(r=>r.json());
+      await page.goto(`${BASE}/`);await settled(page,live);
+      const s=await check(page,live),api=await page.request.get(`${BASE}/api/status`).then(r=>r.json());
       assert.deepEqual(s.tools.map(t=>t.id),configured.map(t=>t.id));
       assert.deepEqual(api.agents.map(t=>t.id),configured.map(t=>t.id));
       if(live===5)for(const a of s.actors.slice(3))assert(a.monitorOn&&a.requested==='working','real explorer detector drives typing');
@@ -79,7 +80,7 @@ async function capture(page,name) {
       let list=[...base,...extra.slice(0,3)],mode='working',fail=false;
       await context.route('**/api/status',r=>r.fulfill(fail?{status:503,body:'offline'}:
         {json:{ts:1792026000,agents:list.map(t=>({...t,status:mode}))}}));
-      await page.goto('http://127.0.0.1:8889/');await settled(page,6,mode);
+      await page.goto(`${BASE}/`);await settled(page,6,mode);
       let s=await check(page,6);
       assert.deepEqual(s.actors.map(a=>a.sprite),['moss','sky','sun','lilac','rose','fern']);
       assert.deepEqual(s.stations.slice(0,3).map(d=>d.seat),[{x:96,y:118},{x:384,y:118},{x:406,y:237}]);
@@ -124,7 +125,7 @@ async function capture(page,name) {
         await new Promise(resolve=>setTimeout(resolve,3500));
         await r.fulfill({json:{ts:1792026000,agents:base.map(t=>({...t,status:'working'}))}});
       });
-      await delayed.goto('http://127.0.0.1:8889/');await settled(delayed,3,'working');
+      await delayed.goto(`${BASE}/`);await settled(delayed,3,'working');
       assert.deepEqual(aborted,[],'a cold process snapshot exceeding 2.5s is allowed to finish');
       await delayed.close();console.log('PASS slow first status response without aborted scans');
       console.log('PASS reconnect, reorder, remove, rename, safe text rendering, empty config and repopulation');

@@ -1,7 +1,18 @@
 ﻿from pathlib import Path
-from PIL import Image
 import json
+import os
+import subprocess
 import sys
+
+try:
+    from PIL import Image
+except ModuleNotFoundError:
+    # Runtime venv has no art dependency. Reuse the D-drive art interpreter
+    # without installing packages, or use an explicitly supplied interpreter.
+    art_python = Path(os.environ.get('OFFICE_ART_PYTHON', 'D:/AITools/py312/python.exe'))
+    if not art_python.is_file() or art_python.resolve() == Path(sys.executable).resolve():
+        raise
+    raise SystemExit(subprocess.call([str(art_python), str(Path(__file__).resolve()), *sys.argv[1:]]))
 root = Path(__file__).resolve().parents[1]
 for name in sys.argv[1:] or ('attic-idle.png', 'attic-work.png', 'attic-weather.png'):
     im = Image.open(root / 'preview' / name).convert('RGB')

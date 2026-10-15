@@ -129,7 +129,7 @@ class DetectorTests(unittest.TestCase):
         self.assertEqual(set(payload), {"ts", "agents"})
 
     def test_live_independent_local_api(self):
-        with urllib.request.urlopen("http://127.0.0.1:8889/api/status") as response:
+        with urllib.request.urlopen(os.environ.get("OFFICE_URL", "http://127.0.0.1:8889").rstrip("/") + "/api/status") as response:
             data = json.load(response)
             self.assertEqual(response.headers["Cache-Control"], "no-store")
         self.assertEqual({a["id"] for a in data["agents"]}, {t["id"] for t in self.tools})

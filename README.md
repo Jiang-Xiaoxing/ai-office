@@ -16,6 +16,14 @@ Codex、Claude Code (OpenRouter)、Claude Code（DeepSeek）各有一个原创�
 
 `static/weather.js` 独立处理北京时间、小时选择、渐变权重、天窗遮罩、光线和粒子；不修改 `config/tools.json` 或后端接口。光线图在加载时生成并缓存，绘制仍使用 480×270 像素网格及整数缩放。
 
+## 阁楼互动
+
+点击像素伙伴打招呼，屋顶区域会显示工具完整名字、最新状态和一句预设回应，人物上方飘出像素爱心。工作、走路、休息动作保持原样，消息随下一次状态同步更新；断线时明确标记“上次状态”。这是本地场景反馈，不调用 AI 对话。
+
+点击左侧、中央或右下角的大盆栽可以浇水；顶栏“浇水”会一次照料三盆。点击左下角茶桌或顶栏“泡茶”，桌上会出现热茶。两种操作都有短暂冷却，快速连点不会堆叠特效，也不影响工具真实状态。
+
+所有入口支持 Tab 聚焦、Enter/空格触发。按 Escape、点击消息的关闭按钮或画布空白处可收起消息，消息也会在约 6.5 秒后自动消失。窗口缩放后入口跟随画面，减少动画偏好保留静态反馈。没有账号、外网请求、音效、每日任务或持久存档。调研来源与取舍见 [互动调研](docs/interaction-research.md)。
+
 ## 本机使用
 
 双击 `start.vbs` 启动，浏览器打开 **http://127.0.0.1:8889/**。双击 `stop.vbs` 停止。脚本以隐藏窗口运行；不会设置开机自启或修改系统代理。
@@ -158,6 +166,18 @@ Codex、Claude Code (OpenRouter)、Claude Code（DeepSeek）各有一个原创�
 这个命令运行素材绘制脚本，覆盖本项目 `static/assets/` 下的图集、人物 PNG 和人物配置，不连接外网。若重绘机器缺少 Pillow，可按前面的安装方式读取 `requirements-art.txt`，缓存仍指定 D 盘。
 
 ## 验证与交付截图
+
+独立 worktree 推荐在本项目目录运行完整验收：
+
+```powershell
+node tests/run-all.cjs
+```
+
+`node` 是已有的 JavaScript 运行程序，`tests/run-all.cjs` 是相对当前项目目录的测试运行器。它复用已有 D 盘 Python 环境、Playwright 和系统 Edge，在随机临时端口隐藏启动本 checkout 的服务（仅监听 `127.0.0.1`），不启动、停止或修改 8889。测试结束或失败都会关闭临时服务，并还原测试自动生成的三张历史截图。无需安装包或修改系统设置。
+
+完整验收包括下面的原有回归和新增 `verify-interactions.cjs`。`verify-site.cjs` 在此运行器中使用临时鉴权反代夹具，检查本 worktree 的 `/office/` 前缀资源和匿名拒绝；不读取私人小站凭据，不宣称验证了实际小站部署。单独运行该脚本仍可按原方式验证真实小站。
+
+可用进程环境变量 `OFFICE_URL` 指定测试目标地址、`OFFICE_PYTHON` 指定已有 Python；运行器会自动设置。截图检查在运行环境缺少 Pillow 时复用已有 `D:/AITools/py312/python.exe`，可用 `OFFICE_ART_PYTHON` 指定其他已有绘图环境，不会自动装包。新增截图 `preview/interaction-greeting.png`、`interaction-watering.png`、`interaction-tea.png`、`interaction-night.png` 展示鼠标操作后的实际画面，使用仅限测试浏览器的状态和时钟夹具。截图均为 1920×1080，并通过原有逐块 4×4 像素检查。
 
 ```powershell
 & 'D:\ai-office\venv\Scripts\python.exe' 'D:\ai-office\tests\test_detectors.py'
