@@ -157,8 +157,11 @@ h1 {
   inset:0;
   pointer-events:none;
 }
+/* A hover/click popover, not a permanent billboard: #labels stays click-through
+   so the plate can never steal a pointer event from the resident underneath. */
 .nameplate {
   position:absolute;
+  pointer-events:none;
   display:grid;
   grid-template-columns:auto auto;
   align-items:center;
@@ -220,7 +223,7 @@ h1 {
   text-overflow:ellipsis;
   white-space:nowrap;
 }
-.nameplate.selected,.nameplate.keyboard-focused {
+.nameplate.selected,.nameplate.keyboard-focused,.nameplate.pinned {
   border-color:#f5cd74;
   box-shadow:inset 0 2px var(--paper-light),0 0 0 2px var(--edge),0 4px #25232688;
   background:#ffe6ab;
