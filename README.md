@@ -63,6 +63,72 @@ Codex、Claude Code (OpenRouter)、Claude Code（DeepSeek）各有一个原创�
 
 未来加工具先在配置里加一项即可扩展后端接口。需要特殊检测方式时，在 `detectors.py` 的 `RULE_DETECTORS` 注册 `callable(rule, processes, now) -> bool`。新增可见角色还需要开发者在 `static/office.js` 的 `DESKS`、`roomLayout()` 安排工位、素材和休息位置；本次不提供“自定义添加人物”的界面。
 
+## 如何添加新工具
+
+### 1. 在配置中新增工具
+
+打开 `config/tools.json`，在顶层 `tools` 数组里追加工具对象，保留原有工具。每项使用以下实际字段：
+
+| 字段 | 必填情况 | 含义 |
+| --- | --- | --- |
+| `id` | 必填 | 非空且在整个配置中唯一的工具标识，状态接口和前端通过它对应工具；建议使用英文、数字和连字符。 |
+| `name` | 必填 | 非空的显示名，由状态接口返回；现有角色标签仍由前端定义。 |
+| `rules` | 必填 | 非空的识别规则数组；其中任意一条规则命中，就显示为干活。 |
+| `rules[].type` | 必填 | 识别方式：`process`（进程）、`recent_files`（近期文件活动）或 `claude_session`（当前支持的 Claude 启动入口）。 |
+| `rules[].names` | `process` 必填 | 进程名数组，例如 `["claude.exe", "claude"]`；完整匹配进程名，不区分大小写，命中任一名称即可。 |
+| `rules[].contains_all` | `process` 可选 | 命令行关键字数组；同一个进程的命令行必须包含其中所有片段。不区分大小写，匹配时将反斜杠统一为 `/`。省略时不限制命令行关键字。 |
+| `rules[].exclude` | `process` 可选 | 命令行排除关键字数组；包含任意一个片段就忽略该进程，不区分大小写。省略时不排除。 |
+
+其他识别方式的字段：
+
+- `recent_files` 必填 `root`（监测目录，支持 `~`）；可选 `pattern`（文件匹配式，默认 `*`）、`active_seconds`（最近多少秒内修改算活动，默认 `30`）、`dated_directories`（是否扫描 `年/月/日` 子目录，默认关闭）、`lookback_days`（启用日期目录时扫描的天数，默认 `3`，含当天）。
+- `claude_session` 必填 `provider`，目前只能填 `openrouter` 或 `deepseek`，分别识别前文的 `cc-openrouter.cmd` 和 `cc-deepseek.cmd` 启动入口。
+
+### 2. 完整示例：区分两个同名进程
+
+假设两个工具的进程名都是 `claude.exe`，但它们**各自实际进程命令行**分别包含 `project-alpha` 和 `project-beta`。将下面数组中的两项追加到现有 `tools` 数组，保留原有项；不要用这个示例覆盖整个配置文件。
+
+```json
+[
+  {
+    "id": "claude-project-alpha",
+    "name": "Claude Code（项目 Alpha）",
+    "rules": [
+      {
+        "type": "process",
+        "names": ["claude.exe", "claude"],
+        "contains_all": ["project-alpha"],
+        "exclude": ["mcp-server", "sandbox"]
+      }
+    ]
+  },
+  {
+    "id": "claude-project-beta",
+    "name": "Claude Code（项目 Beta）",
+    "rules": [
+      {
+        "type": "process",
+        "names": ["claude.exe", "claude"],
+        "contains_all": ["project-beta"],
+        "exclude": ["mcp-server", "sandbox"]
+      }
+    ]
+  }
+]
+```
+
+请把示例关键字换成实际命令行中互不重叠的片段，例如已有参数中的项目路径或配置文件路径；`exclude` 也按实际需要保留或删除。JSON 中的 Windows 路径可写成 `D:/work/project-alpha`，或将反斜杠转义成 `D:\\work\\project-alpha`。配置使用双引号，不支持注释或末尾多余逗号。
+
+`contains_all` 只是子串匹配，不会给进程自动添加参数，也不会读取工作目录。只从不同目录启动、但命令行没有区别时，不能据此区分；同一个进程若同时包含两组关键字，也可能让两项都亮起。所有必要关键字应放在**同一条规则**的 `contains_all` 中；不要另加一条只匹配 `claude.exe` 的宽泛规则，否则“任一规则命中”的机制会绕过区分条件。
+
+普通 `process` 规则只检查进程自身的命令行，不向上查父进程。如果区分标记只在启动脚本或祖先进程中，当前 OpenRouter / DeepSeek 应继续使用已有的 `claude_session` 配置；不能直接把脚本名填入 `contains_all` 并假定能匹配到子进程。
+
+### 3. 重启并确认生效
+
+保存配置后，先双击项目目录的 `stop.vbs`，确认办公室已停止，再双击 `start.vbs`，等待启动就绪后打开或刷新 **http://127.0.0.1:8889/**。配置在后端启动时读取，单独刷新网页不会重新加载配置。可以打开 **http://127.0.0.1:8889/api/status**，确认 `agents` 数组中出现新增的 `id`、`name` 和状态：命中规则为 `working`，否则为 `idle`。
+
+**当前版本仅靠修改配置并重启，会自动增加状态接口中的工具项，不会自动增加可见角色和工位。** 画面中的三个角色来自 `static/office.js` 的固定 `DESKS` 列表，座位、屏幕及休息位置由 `roomLayout()` 等前端配置安排。新增可见角色和工位仍需另行扩展这些前端配置及素材；只修改 README 或 `tools.json` 无法实现这一步。
+
 ## 背景与人物素材
 
 背景采用用户已选定的晴天绿植阁楼图，桌子、椅子、沙发、绿植和楼梯均已包含在图中，页面不再叠加另一套家具。工位依次对齐左上、右上和右下的椅子；干活时只在已有显示器内部叠加亮屏和代码动画。`static/office.js` 的 `roomLayout()` 保存按背景测量的座位、屏幕、障碍物与休息点。
