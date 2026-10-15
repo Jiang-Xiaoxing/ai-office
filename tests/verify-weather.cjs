@@ -38,7 +38,8 @@ function inPane(x,y,polygons) {
     // An American browser timezone must still open to the correct Beijing weather.
     const context=await browser.newContext({viewport:{width:1920,height:1080},deviceScaleFactor:1,timezoneId:'America/Los_Angeles'});
     let work=false;
-    await context.route('**/api/status',route=>route.fulfill({json:{ts:Math.floor(Date.now()/1000),agents:ids.map(id=>({id,status:work?'working':'idle'}))}}));
+    await context.route('**/api/status',route=>route.fulfill({json:{ts:Math.floor(Date.now()/1000),agents:ids.map((id,i)=>({id,
+      name:['Codex','Claude Code (OpenRouter)','Claude Code (DeepSeek)'][i],status:work?'working':'idle'}))}}));
     const errors=[];
     for(const [kind,iso] of Object.entries(times)) {
       const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));

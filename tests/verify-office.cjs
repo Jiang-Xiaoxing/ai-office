@@ -9,6 +9,7 @@ fs.mkdirSync(TMP,{recursive:true});
 const read=p=>p.evaluate(()=>window.officeDebug.snapshot());
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const ids=['codex','openrouter','claude-code'];
+const names=['Codex','Claude Code (OpenRouter)','Claude Code (DeepSeek)'];
 const providerScenarios=JSON.parse(execFileSync(path.join(ROOT,'venv/Scripts/python.exe'),
   [path.join(__dirname,'provider_scenarios.py')],{cwd:ROOT,windowsHide:true,encoding:'utf8'}));
 const settled=(s,work)=>s.actors.every(a=>a.requested===(work?'working':'idle')&&!a.route.length&&
@@ -110,7 +111,7 @@ async function watchTravel(page,work) {
   let mode='idle',failing=false;
   function mock(route) {
     calls.push({url:route.request().url(),time:Date.now()});
-    return route.fulfill(failing?{status:503,body:'unavailable'}:{json:{ts:Math.floor(Date.now()/1000),agents:ids.map((id,i)=>({id,status:Array.isArray(mode)?mode[i]:mode}))}});
+    return route.fulfill(failing?{status:503,body:'unavailable'}:{json:{ts:Math.floor(Date.now()/1000),agents:ids.map((id,i)=>({id,name:names[i],status:Array.isArray(mode)?mode[i]:mode}))}});
   }
   await context.route('**/api/status',mock);
   await context.route('**/office/**',async route=>{
@@ -195,7 +196,7 @@ async function watchTravel(page,work) {
     console.log('PASS first load with working status walks to work');
     mode='idle';await page.setViewportSize({width:1920,height:1080});
     await page.goto('http://127.0.0.1:8889/office/',{waitUntil:'networkidle'});await arrive(page,false);
-    for(const suffix of ['static/weather.js','static/office.js','static/office.css','static/assets/attic-bg-2.png','static/assets/office-atlas.png','static/assets/office-atlas.json','api/status'])
+    for(const suffix of ['static/weather.js','static/office.js','static/office.css','static/assets/attic-bg-2.png','static/assets/office-atlas.png','static/assets/office-atlas.json','static/assets/residents.json','api/status'])
       assert(resources.some(r=>r.url.endsWith(`/office/${suffix}`)&&r.status===200),`prefix resource: ${suffix}`);
     assert(calls.some(c=>c.url.endsWith('/office/api/status')));await checkFit(page);
     console.log('PASS /office/ prefix: relative CSS, JS, atlas and API');

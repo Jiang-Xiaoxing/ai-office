@@ -1,11 +1,12 @@
 ﻿from pathlib import Path
 from PIL import Image
 import json
+import sys
 root = Path(__file__).resolve().parents[1]
-for name in ('attic-idle.png', 'attic-work.png', 'attic-weather.png'):
+for name in sys.argv[1:] or ('attic-idle.png', 'attic-work.png', 'attic-weather.png'):
     im = Image.open(root / 'preview' / name).convert('RGB')
     assert im.size == (1920, 1080), im.size
-    # Run verify-labels.cjs first to capture the HTML overlay bounds for each image.
+    # Run the matching browser capture first to record each image's HTML overlay bounds.
     masks = json.loads((root / '.browser-tmp' / f'{Path(name).stem}-masks.json').read_text())
     # The room fills 1920x1080 at 4x, starting at (0, 0). HTML text is separate.
     # Every unobscured 4x4 block must be one source pixel, without smoothing.
