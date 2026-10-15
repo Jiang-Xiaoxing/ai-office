@@ -14,6 +14,8 @@
   const CAPACITY = 6, IDLE_SLOTS = [0, 2, 4, 1, 3, 5];
   const COLORS = ['#a5cbb7', '#a6c4e1', '#efd296', '#b39ac4', '#c5838b', '#9cb47a'];
   const ACTIVITIES = { sleep: '打盹', read: '看书', tea: '喝茶', type: '敲键盘', walk: '走动' };
+  // Optional runtime hint (e.g. "Flash") from the backend is appended to the display name.
+  const displayName = t => [t.name || t.id, t.detail].filter(Boolean).join(' · ');
   const actors = [];
   let tools = [], residents = [], overflowNotice = '';
   const ROOM = { w: 480, h: 270 };
@@ -111,14 +113,15 @@
       const slot=Array.from({length:CAPACITY},(_,i)=>i).find(i=>!used.has(i));
       slots.set(t.id,slot);used.add(slot);
     }
-    const signature=visible.map(t=>JSON.stringify([t.id,t.name,slots.get(t.id)])).join('|');
+    const signature=visible.map(t=>JSON.stringify([t.id,displayName(t),slots.get(t.id)])).join('|');
     if(signature!==actors.signature) {
       const previous=new Map(actors.map(a=>[a.id,a]));
       actors.splice(0,actors.length,...visible.map((t,index)=>{
         const slot=slots.get(t.id),look=residents[slot],old=previous.get(t.id);
         const parts=(t.name||t.id).match(/^(.*?)\s*[（(]([^()（）]+)[）)]$/);
-        const identity={id:t.id,name:parts?parts[1]:(t.name||t.id),subtitle:parts?.[2],
-          rosterName:t.name||t.id,index,slot,sprite:look.id,color:COLORS[slot]};
+        const subtitle=[parts?.[2],t.detail].filter(Boolean).join(' · ')||undefined;
+        const identity={id:t.id,name:parts?parts[1]:(t.name||t.id),subtitle,
+          rosterName:displayName(t),index,slot,sprite:look.id,color:COLORS[slot]};
         if(old?.slot===slot)return Object.assign(old,identity);
         return {...identity,x:0,y:0,mode:'idle',dir:0,requested:null,route:[],distance:0,frame:0,
           phase:slot*1.3,idleSlot:IDLE_SLOTS[slot],idleTime:14+slot*2,idleChanges:0};
@@ -359,11 +362,11 @@
       const el=document.createElement('span');el.className='agent-status';
       const dot=document.createElement('i'),name=document.createElement('span'),state=document.createElement('em');
       el.style.setProperty('--agent-color',color);el.style.setProperty('--status-color',t.status==='working'?'#b9d59c':'#edc57e');
-      name.textContent=t.name||t.id;state.textContent=t.status==='working'?'干活中':'摸鱼中';
+      name.textContent=displayName(t);state.textContent=t.status==='working'?'干活中':'摸鱼中';
       el.append(dot,name,state);roster.append(el);
     }
     roster.scrollLeft=scroll;
-    canvas.setAttribute('aria-label',`${weather?.snapshot().name||''}阁楼；`+tools.map(t=>`${t.name||t.id}：${t.status==='working'?'干活中':'摸鱼中'}`).join('；'));
+    canvas.setAttribute('aria-label',`${weather?.snapshot().name||''}阁楼；`+tools.map(t=>`${displayName(t)}：${t.status==='working'?'干活中':'摸鱼中'}`).join('；'));
   }
   async function poll() {
     if(polling)return;polling=true;

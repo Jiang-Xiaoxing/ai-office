@@ -129,7 +129,9 @@ async function capture(page,name) {
     } else {
       const base=configured.map(t=>({id:t.id,name:t.name}));
       const extra=Array.from({length:5},(_,i)=>({id:`extra-${i}`,name:`工具 ${i+4}`}));
-      let list=[...base,...extra.slice(0,3)],mode='working',fail=false;
+      // Fill exactly to capacity: the configured tool count varies, and an earlier
+      // overflow would emit a second capacity warning before the assertion at line 151.
+      let list=[...base,...extra.slice(0,6-base.length)],mode='working',fail=false;
       await context.route('**/api/status',r=>r.fulfill(fail?{status:503,body:'offline'}:
         {json:{ts:1792026000,agents:list.map(t=>({...t,status:mode}))}}));
       await page.goto(`${BASE}/`);await settled(page,6,mode);
@@ -149,41 +151,53 @@ async function capture(page,name) {
       assert(warnings.some(w=>w.includes('6')&&w.includes('extra-3')&&w.includes('extra-4')),'capacity warning names overflow');
       const polls=(await read(page)).polls;await page.waitForFunction(n=>officeDebug.snapshot().polls>n,polls);
       assert.equal(warnings.length,1,'warning does not repeat every poll');
-      // Eight readable tags can now fit on the wide footer. Exercise real
-      // overflow at the supported narrow viewport rather than forcing a cap.
+      // Every footer tag can fit on the wide viewport. Exercise real overflow at
+      // the supported narrow viewport rather than forcing a cap.
       await page.setViewportSize({width:1024,height:600});await page.waitForTimeout(150);
       await page.locator('#roster').evaluate(el=>{el.scrollLeft=el.scrollWidth;});
       assert(await page.locator('#roster').evaluate(el=>el.scrollLeft>0),'overflow footer can scroll');
       const before=(await read(page)).polls;await page.waitForFunction(n=>officeDebug.snapshot().polls>n,before);
       assert(await page.locator('#roster').evaluate(el=>el.scrollLeft>0),'poll preserves footer scroll position');
       await page.setViewportSize({width:1920,height:1080});await page.waitForTimeout(150);
-      console.log('PASS eight tools: six residents and stations, eight footer statuses, one useful console warning');
+      console.log(`PASS ${base.length+extra.length} tools: six residents and stations, matching footer statuses, one useful console warning`);
       fail=true;await page.waitForFunction(()=>!officeDebug.snapshot().connected);assert.equal((await read(page)).actors.length,6);fail=false;
       list=[extra[0],base[2],base[0],base[1]];await settled(page,4,mode);s=await check(page,4);
       assert.deepEqual(s.actors.map(a=>a.slot),[3,2,0,1],'legacy seats and looks survive reordered config');
       list=[{id:'brand-new',name:'<工具>（新名字）'}];await settled(page,1,mode);await check(page,1);
       assert.equal(await page.locator('.nameplate strong').textContent(),'<工具>');
       assert.equal(await page.locator('.nameplate small').textContent(),'新名字');
+      // A backend model hint (e.g. the Flash model) must reach both the nameplate
+      // subtitle and the footer name without disturbing the configured name. Both
+      // lists below hold one tool, so wait for the next poll rather than a count change.
+      const nextPoll=async()=>{const n=(await read(page)).polls;await page.waitForFunction(x=>officeDebug.snapshot().polls>x,n);};
+      list=[{id:'flash',name:'Claude Code (DeepSeek)',detail:'Flash'}];await nextPoll();
+      await settled(page,1,mode);await check(page,1);
+      assert.equal(await page.locator('.nameplate strong').textContent(),'Claude Code');
+      assert.equal(await page.locator('.nameplate small').textContent(),'DeepSeek · Flash');
+      assert.equal(await page.locator('#roster .agent-status span').textContent(),'Claude Code (DeepSeek) · Flash');
+      list=[{id:'plain',name:'Claude Code (DeepSeek)'}];await nextPoll();
+      await settled(page,1,mode);await check(page,1);
+      assert.equal(await page.locator('.nameplate small').textContent(),'DeepSeek','an absent hint adds no marker');
       list=[];await settled(page,0);await check(page,0);
-      list=base;await settled(page,3,mode);await check(page,3);
+      list=base;await settled(page,base.length,mode);await check(page,base.length);
       list=[...base,...Array.from({length:97},(_,i)=>({id:`overflow-${i}`,name:`额外工具 ${i}`}))];
       await settled(page,6,mode);await check(page,6);
       await page.setViewportSize({width:390,height:844});
       await page.waitForTimeout(150);
       const box=await page.locator('#game').boundingBox();
       assert(box.width>0&&box.height>0&&box.x>=0&&box.y>=0&&box.x+box.width<=390&&box.y+box.height<=844);
-      assert.equal(await page.locator('.agent-status').count(),100);
+      assert.equal(await page.locator('.agent-status').count(),base.length+97);
       await page.locator('#roster').evaluate(el=>{el.scrollLeft=el.scrollWidth;});
-      assert(await page.locator('#roster').evaluate(el=>el.scrollLeft>0),'100 narrow-screen statuses remain scrollable');
+      assert(await page.locator('#roster').evaluate(el=>el.scrollLeft>0),'all narrow-screen statuses remain scrollable');
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth||document.documentElement.scrollHeight>innerHeight),false);
-      console.log('PASS 100 tools on a small screen: bounded footer, scrollable statuses and a visible room');
+      console.log(`PASS ${base.length+97} tools on a small screen: bounded footer, scrollable statuses and a visible room`);
       const delayed=await context.newPage(),aborted=[];
       delayed.on('requestfailed',r=>aborted.push(r.url()));
       await delayed.route('**/api/status',async r=>{
         await new Promise(resolve=>setTimeout(resolve,3500));
         await r.fulfill({json:{ts:1792026000,agents:base.map(t=>({...t,status:'working'}))}});
       });
-      await delayed.goto(`${BASE}/`);await settled(delayed,3,'working');
+      await delayed.goto(`${BASE}/`);await settled(delayed,base.length,'working');
       assert.deepEqual(aborted,[],'a cold process snapshot exceeding 2.5s is allowed to finish');
       await delayed.close();console.log('PASS slow first status response without aborted scans');
       console.log('PASS reconnect, reorder, remove, rename, safe text rendering, empty config and repopulation');

@@ -65,17 +65,18 @@ Codex、Claude Code (OpenRouter)、Claude Code（DeepSeek）各有一个原创�
 
 | 工具 | 当前识别规则 |
 | --- | --- |
-| Codex | `~/.codex/sessions/YYYY/MM/DD/*.jsonl` 近 3 天目录内、最近 30 秒修改的会话；或 `codex.exe` / `codex`，排除命令行中的 `app-server`、`exec-server`、`mcp-server`、`sandbox` |
-| Claude Code (OpenRouter)，ID `openrouter` | Claude CLI 自身或最近的启动祖先进程命令行包含 `cc-openrouter.cmd`，对应本机 `D:\Tools\ClaudeCode\cc-openrouter.cmd` |
-| Claude Code（DeepSeek），ID `claude-code` | Claude CLI 自身或最近的启动祖先进程命令行包含 `cc-deepseek.cmd`，对应本机 `D:\Tools\ClaudeCode\cc-deepseek.cmd` |
+| Codex | 任意 `codex.exe` / `codex` 进程：`codex exec`、CLI 交互、桌面端后台（`app-server`、`exec-server` 等）都算干活，不依赖安装路径、版本哈希或启动文件 |
+| Claude Code (OpenRouter)，ID `openrouter` | 任一 Claude Code CLI，且其进程环境 / 命令行的 base URL 或模型名指向 openrouter |
+| Claude Code（DeepSeek），ID `claude-code` | 任一 Claude Code CLI，且其 base URL / 模型名指向 deepseek；模型名含 `flash` 时名牌与底栏标注 “Flash” |
+| Claude Code，ID `claude-code-other` | 其余认不出服务的 Claude Code CLI（例如直接运行 `claude`、未知 base URL 或模型名） |
 
 `process` 规则用 `names` 指定进程名；可用 `contains_all` 要求命令行包含所有片段，用 `exclude` 排除后台服务。`recent_files` 规则用 `root`、`pattern`、`active_seconds` 设置文件活动窗口，可用 `dated_directories` 和 `lookback_days` 扫日期目录。
 
-`claude_session` 规则用 `provider` 指定 `openrouter` 或 `deepseek`。先找原生 `claude.exe` / `claude` 或运行 `@anthropic-ai/claude-code/` 的 Node 进程，再沿 PID / 父 PID 最多检查 32 层，使用最近一层明确的启动脚本标记区分。脚本名按完整名称、不区分大小写匹配，`.cmd.bak` 等不算；遇到两种标记并存，或因祖先进程不可读、已退出等原因未找到标记时，不归属任何一方，防止两个角色一起误亮。祖先进程创建时间晚于子进程时也不关联，防止 PID 重用误判。只剩启动窗口而没有 Claude CLI 时计为空闲。
+`claude_session` 规则用 `provider` 指定 `openrouter`、`deepseek` 或 `other`。检测器先找原生 `claude.exe` / `claude` 或运行 `@anthropic-ai/claude-code/` 的 Node 进程：任一在运行就计作干活（含等待输入的时间），再按「进程环境变量里的 base URL → 模型名 → 进程及祖先进程命令行」的顺序判断实际服务，归到对应角色；认不出服务的归到 `other`，同样显示干活而不是摸鱼。只读取 `ANTHROPIC_BASE_URL`、`ANTHROPIC_MODEL` 等非敏感键，绝不读取 API Key 或令牌，也不导出进程参数。检测不依赖任何 `cc-*.cmd` 文件名，以后新增 `cc-deepseek-xxx.cmd` 等启动文件无需改代码或配置。祖先进程创建时间晚于子进程时不关联，防止 PID 重用误判；只剩启动窗口而没有 Claude CLI 时计为空闲。
 
-检测保留原有语义：**可识别归属的 CLI 进程存在也计作干活，包含等待输入的时间；会话文件刚更新属于活动推断。** 这不是模型逐 token 生成的精确检测。Claude 归属依据启动入口，不查询实际模型或远端服务；如绕过上述脚本启动且没有脚本标记，会显示空闲。进程命令行只在本机内存匹配，不读取启动脚本内容、环境变量或 API Key，接口仅返回工具 ID、名字和状态。
+检测保留原有语义：**可识别归属的 CLI 进程存在也计作干活，包含等待输入的时间。** 这不是模型逐 token 生成的精确检测。Claude Code 的归属依据进程环境与命令行里的 base URL / 模型名，Codex 依据进程名，都不依赖启动文件或安装路径。进程环境与命令行只在本机内存匹配，不读取启动脚本内容或 API Key，接口仅返回工具 ID、名字、状态和可选的 Flash 标记。
 
-新增工具只需在配置里加一项并重启，状态接口、人物标签和底栏会自动读取工具清单，无需修改前端。需要特殊检测方式时，在 `detectors.py` 的 `RULE_DETECTORS` 注册 `callable(rule, processes, now) -> bool`。
+新增工具只需在配置里加一项并重启，状态接口、人物标签和底栏会自动读取工具清单，无需修改前端。需要特殊检测方式时，在 `detectors.py` 的 `RULE_DETECTORS` 注册 `callable(rule, processes, now) -> bool 或匹配字典`。
 
 ## 如何添加新工具
 
@@ -85,7 +86,7 @@ Codex、Claude Code (OpenRouter)、Claude Code（DeepSeek）各有一个原创�
 { "id": "my-tool", "name": "我的工具", "rules": [{ "type": "process", "names": ["my-tool.exe"] }] }
 ```
 
-原有 Codex、OpenRouter、DeepSeek 保留各自的位置和外观；新增工具按配置顺序使用未占用的工位与人物样式，原三项保留时依次启用后墙中间的紫衣发髻、前沿楼梯左侧的粉衣浅色短发、前沿楼梯右侧的绿衣帽子人物。新增桌椅电脑只在对应工位有人时出现；三个新增位置均靠墙，中央地板、楼梯口与沙发区保持通畅。配置的前六项进入画面，超过六项的工具仍在底栏显示状态（空间不足可横向滚动），浏览器控制台会提示上限和超出项，不会创建重叠工位。
+原有 Codex、OpenRouter、DeepSeek 与通用 Claude Code 保留各自的位置和外观；新增工具按配置顺序使用未占用的工位与人物样式，原四项保留时依次启用前沿楼梯左侧的粉衣浅色短发、前沿楼梯右侧的绿衣帽子人物（后墙中间的紫衣发髻已由通用 Claude Code 占用）。新增桌椅电脑只在对应工位有人时出现；三个新增位置均靠墙，中央地板、楼梯口与沙发区保持通畅。配置的前六项进入画面，超过六项的工具仍在底栏显示状态（空间不足可横向滚动），浏览器控制台会提示上限和超出项，不会创建重叠工位。
 
 ### 1. 在配置中新增工具
 
@@ -104,7 +105,7 @@ Codex、Claude Code (OpenRouter)、Claude Code（DeepSeek）各有一个原创�
 其他识别方式的字段：
 
 - `recent_files` 必填 `root`（监测目录，支持 `~`）；可选 `pattern`（文件匹配式，默认 `*`）、`active_seconds`（最近多少秒内修改算活动，默认 `30`）、`dated_directories`（是否扫描 `年/月/日` 子目录，默认关闭）、`lookback_days`（启用日期目录时扫描的天数，默认 `3`，含当天）。
-- `claude_session` 必填 `provider`，目前只能填 `openrouter` 或 `deepseek`，分别识别前文的 `cc-openrouter.cmd` 和 `cc-deepseek.cmd` 启动入口。
+- `claude_session` 必填 `provider`，可填 `openrouter`、`deepseek` 或 `other`，分别对应前文的 OpenRouter、DeepSeek 与「认不出服务的通用 Claude Code」角色；识别依据进程环境与命令行的 base URL / 模型名，不依赖启动文件名。
 
 ### 2. 完整示例：区分两个同名进程
 
@@ -143,7 +144,7 @@ Codex、Claude Code (OpenRouter)、Claude Code（DeepSeek）各有一个原创�
 
 `contains_all` 只是子串匹配，不会给进程自动添加参数，也不会读取工作目录。只从不同目录启动、但命令行没有区别时，不能据此区分；同一个进程若同时包含两组关键字，也可能让两项都亮起。所有必要关键字应放在**同一条规则**的 `contains_all` 中；不要另加一条只匹配 `claude.exe` 的宽泛规则，否则“任一规则命中”的机制会绕过区分条件。
 
-普通 `process` 规则只检查进程自身的命令行，不向上查父进程。如果区分标记只在启动脚本或祖先进程中，当前 OpenRouter / DeepSeek 应继续使用已有的 `claude_session` 配置；不能直接把脚本名填入 `contains_all` 并假定能匹配到子进程。
+普通 `process` 规则只检查进程自身的命令行，不向上查父进程。要区分 Claude Code 使用的服务，请使用 `claude_session` 规则（依据进程环境与命令行的 base URL / 模型名判断）；不要给 `claude.exe` 加一条只匹配进程名的宽泛 `process` 规则，否则它会命中所有 Claude Code，绕过服务归属。
 
 ### 3. 重启并确认生效
 

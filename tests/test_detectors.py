@@ -14,6 +14,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from detectors import detect_status, load_tools, process_matches, recent_files
 
+CLAUDE_IDS = ("openrouter", "claude-code", "claude-code-other")
+IDLE = {tool: "idle" for tool in CLAUDE_IDS}
+NONE_DETAIL = {tool: None for tool in CLAUDE_IDS}
+DEEPSEEK_ENV = {"ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic",
+                "ANTHROPIC_MODEL": "deepseek-v4-pro"}
+OPENROUTER_ENV = {"ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
+                  "ANTHROPIC_MODEL": "nvidia/nemotron-3-ultra-550b-a55b:free"}
+
 
 class DetectorTests(unittest.TestCase):
     def setUp(self):
@@ -23,69 +31,101 @@ class DetectorTests(unittest.TestCase):
         return any(process_matches(rule, list(items), time.time()) for rule in
                    self.tools[tool]["rules"] if rule["type"] == "process")
 
-    def test_codex_excludes_background_services(self):
-        for service in ("app-server", "exec-server", "mcp-server", "sandbox"):
-            self.assertFalse(self.processes(0, {"name": "codex.exe", "command": f"codex {service}"}))
-        self.assertTrue(self.processes(0, {"name": "CODEX.EXE", "command": "codex --model local"}))
-        self.assertFalse(self.processes(0, {"name": "other.exe", "command": "codex"}))
-
-    def status_for(self, *items):
-        processes = [Mock(info={"pid": pid, "ppid": ppid, "name": name, "cmdline": command,
-                                "create_time": created})
-                     for pid, ppid, name, command, created in items]
-        with patch("detectors.psutil.process_iter", return_value=processes) as snapshot:
+    def detect(self, *items):
+        env_by_pid = {}
+        processes = []
+        for item in items:
+            pid, ppid, name, command, created = item[:5]
+            env = item[5] if len(item) > 5 else {}
+            env_by_pid[pid] = env
+            processes.append(Mock(info={"pid": pid, "ppid": ppid, "name": name,
+                                        "cmdline": command, "create_time": created}))
+        with patch("detectors.psutil.process_iter", return_value=processes) as snapshot, \
+             patch("detectors.psutil.Process",
+                   side_effect=lambda pid: Mock(environ=Mock(return_value=env_by_pid.get(pid, {})))):
             payload = detect_status(self.tools[1:])
         self.assertEqual(set(snapshot.call_args.kwargs["attrs"]),
                          {"pid", "ppid", "name", "cmdline", "create_time"})
         self.assertEqual(set(payload), {"ts", "agents"})
-        self.assertTrue(all(set(a) == {"id", "name", "status"} for a in payload["agents"]))
-        return {a["id"]: a["status"] for a in payload["agents"]}
+        self.assertEqual({a["id"] for a in payload["agents"]}, set(CLAUDE_IDS))
+        for agent in payload["agents"]:
+            self.assertTrue({"id", "name", "status"} <= set(agent) <= {"id", "name", "status", "detail"})
+        return {a["id"]: a for a in payload["agents"]}
+
+    def status_for(self, *items):
+        return {tool: agent["status"] for tool, agent in self.detect(*items).items()}
+
+    def detail_for(self, *items):
+        return {tool: agent.get("detail") for tool, agent in self.detect(*items).items()}
 
     @staticmethod
-    def session(provider, base=100, native=True):
-        return [(base, 0, "cmd.exe", ["cmd.exe", "/c", rf"D:\Tools\ClaudeCode\cc-{provider}.cmd"], 1),
-                (base+1, base, "claude.exe" if native else "node.exe",
-                 ["claude.exe"] if native else ["node.exe", r"D:\npm\@anthropic-ai\claude-code\cli.js"], 2)]
+    def cli(pid, ppid, env=None, native=True):
+        return (pid, ppid, "claude.exe" if native else "node.exe",
+                ["claude.exe"] if native else ["node.exe", r"D:\npm\@anthropic-ai\claude-code\cli.js"],
+                2, env or {})
 
-    def test_deepseek_and_openrouter_native_and_node_sessions_are_independent(self):
+    def test_codex_matches_any_codex_process(self):
+        for command in ("codex app-server", "codex exec-server", "codex mcp-server", "codex sandbox",
+                        "codex exec run", r"C:\Users\me\AppData\Local\OpenAI\Codex\bin\abcd\codex.exe -c x"):
+            self.assertTrue(self.processes(0, {"name": "codex.exe", "command": command}))
+        self.assertTrue(self.processes(0, {"name": "CODEX.EXE", "command": "codex --model local"}))
+        self.assertFalse(self.processes(0, {"name": "other.exe", "command": "codex"}))
+
+    def test_deepseek_and_openrouter_and_unknown_services_are_independent(self):
         for native in (True, False):
-            for provider, active_id in (("deepseek", "claude-code"), ("openrouter", "openrouter")):
-                with self.subTest(provider=provider, native=native):
-                    state = self.status_for(*self.session(provider, native=native))
-                    self.assertEqual(state, {tool: "working" if tool == active_id else "idle"
-                                             for tool in ("openrouter", "claude-code")})
-            self.assertEqual(self.status_for(*self.session("deepseek", native=native),
-                                             *self.session("openrouter", base=200, native=native)),
-                             {"openrouter": "working", "claude-code": "working"})
+            deepseek = (100, 0, "cmd.exe", ["cmd.exe", "/c", "cc-deepseek-flash.cmd"], 1), \
+                self.cli(101, 100, DEEPSEEK_ENV, native=native)
+            openrouter = (200, 0, "cmd.exe", ["cmd.exe", "/c", "cc-openrouter.cmd"], 1), \
+                self.cli(201, 200, OPENROUTER_ENV, native=native)
+            with self.subTest(native=native):
+                self.assertEqual(self.status_for(*deepseek), {**IDLE, "claude-code": "working"})
+                self.assertEqual(self.status_for(*openrouter), {**IDLE, "openrouter": "working"})
+                self.assertEqual(self.status_for(*deepseek, *openrouter),
+                                 {"openrouter": "working", "claude-code": "working",
+                                  "claude-code-other": "idle"})
 
-    def test_unmarked_claude_and_launcher_without_cli_are_idle(self):
-        idle = {"openrouter": "idle", "claude-code": "idle"}
-        self.assertEqual(self.status_for(), idle)
-        self.assertEqual(self.status_for((1, 0, "claude.exe", ["claude.exe"], 1)), idle)
-        self.assertEqual(self.status_for(self.session("openrouter")[0]), idle)
-        self.assertEqual(self.status_for((1, 0, "codebuddy.exe", ["codebuddy"], 1)), idle)
-        self.assertEqual(self.status_for((1, 0, "node.exe", ["other/claude-code.js", "cc-openrouter.cmd"], 1)), idle)
+    def test_unmarked_claude_is_working_under_other_role(self):
+        # A live Claude Code CLI whose service cannot be read still counts as working.
+        self.assertEqual(self.status_for(self.cli(101, 100)),
+                         {**IDLE, "claude-code-other": "working"})
+        self.assertEqual(self.detail_for(self.cli(101, 100)), {"openrouter": None, "claude-code": None,
+                                                               "claude-code-other": None})
+        # A launcher window without a live CLI, and unrelated processes, stay idle.
+        self.assertEqual(self.status_for((1, 0, "cmd.exe", ["cmd.exe", "/c", "cc-deepseek.cmd"], 1)), IDLE)
+        self.assertEqual(self.status_for((1, 0, "codebuddy.exe", ["codebuddy"], 1)), IDLE)
+        self.assertEqual(self.status_for((1, 0, "node.exe", ["other/claude-code.js", "cc-openrouter.cmd"], 1)), IDLE)
 
-    def test_ancestor_markers_direct_markers_and_nearest_context(self):
-        expected = {"openrouter": "working", "claude-code": "idle"}
-        self.assertEqual(self.status_for((3, 0, "CLAUDE.EXE", ["claude", "CC-OPENROUTER.CMD"], 1)), expected)
-        wrapper, cli = self.session("openrouter")
-        self.assertEqual(self.status_for(wrapper, (150, 100, "cmd.exe", ["cmd", "/c", "claude"], 1.5),
-                                        (cli[0], 150, *cli[2:])), expected)
-        self.assertEqual(self.status_for((99, 0, "cmd.exe", ["cc-deepseek.cmd"], 0),
-                                        (100, 99, *wrapper[2:]), cli), expected)
+    def test_flash_model_is_marked_and_other_models_are_not(self):
+        flash_env = dict(DEEPSEEK_ENV, ANTHROPIC_MODEL="deepseek-v4-flash")
+        self.assertEqual(self.detail_for((1, 0, "cmd.exe", ["cmd.exe", "/c", "cc-deepseek.cmd"], 1),
+                                         self.cli(2, 1, flash_env)),
+                         {**NONE_DETAIL, "claude-code": "Flash"})
+        self.assertEqual(self.detail_for((1, 0, "cmd.exe", ["cmd.exe", "/c", "cc-deepseek.cmd"], 1),
+                                         self.cli(2, 1, DEEPSEEK_ENV)),
+                         {**NONE_DETAIL, "claude-code": None})
 
-    def test_ambiguous_markers_missing_ancestors_cycles_and_pid_reuse_fail_closed(self):
-        idle = {"openrouter": "idle", "claude-code": "idle"}
-        for wrapper in (["cc-openrouter.cmd", "cc-deepseek.cmd"], ["cc-openrouter.cmd.bak"],
-                        ["not-cc-openrouter.cmd"], ["cc-openrouter.cmd-other"]):
-            self.assertEqual(self.status_for((100, 0, "cmd.exe", wrapper, 1),
-                                            self.session("openrouter")[1]), idle)
-        self.assertEqual(self.status_for(self.session("openrouter")[1]), idle)
+    def test_service_reads_env_then_command_line_then_ancestors(self):
+        # Command-line fallback when the CLI's environment is unreadable but an
+        # ancestor's command line names the service generically.
+        self.assertEqual(self.status_for((1, 0, "cmd.exe", ["cmd.exe", "/c", "cc-openrouter.cmd"], 1),
+                                         self.cli(2, 1, {}, native=True)),
+                         {**IDLE, "openrouter": "working"})
+        # Ancestor environment is consulted when the CLI itself has none.
+        self.assertEqual(self.status_for((1, 0, "cmd.exe", ["cmd.exe", "/c", "cc-deepseek-flash.cmd"], 1, DEEPSEEK_ENV),
+                                         self.cli(2, 1, {}, native=True)),
+                         {**IDLE, "claude-code": "working"})
+
+    def test_cycles_and_pid_reuse_fail_closed(self):
+        # A cycle in the parent chain must not loop forever; a reused PID must not
+        # attach a surviving CLI to an unrelated, newer shell.
         self.assertEqual(self.status_for((1, 2, "claude.exe", ["claude"], 1),
-                                        (2, 1, "cmd.exe", ["cmd"], 1)), idle)
-        self.assertEqual(self.status_for((100, 0, "cmd.exe", ["cc-openrouter.cmd"], 3),
-                                        self.session("openrouter")[1]), idle)
+                                         (2, 1, "cmd.exe", ["cmd"], 1)),
+                         {**IDLE, "claude-code-other": "working"})
+        # A newer parent is a reused PID, so its marker is not trusted: the CLI
+        # falls back to the generic "other" role rather than openrouter.
+        self.assertEqual(self.status_for((100, 0, "cmd.exe", ["cmd.exe", "/c", "cc-openrouter.cmd"], 3),
+                                         self.cli(101, 100, {}, native=True)),
+                         {**IDLE, "claude-code-other": "working"})
 
     def test_recent_file_window_date_rollover_and_future_mtime(self):
         temp_root = ROOT / ".browser-tmp"
@@ -110,13 +150,17 @@ class DetectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=temp_root) as directory:
             file = Path(directory) / "tools.json"
             for rules in ([{"type": "unknown"}], [{"type": "process", "names": []}],
-                          [{"type": "claude_session"}], [{"type": "claude_session", "provider": "other"}]):
+                          [{"type": "claude_session"}], [{"type": "claude_session", "provider": "anthropic"}]):
                 file.write_text(json.dumps({"tools": [{"id": "test", "name": "Test", "rules": rules}]}))
                 with self.assertRaises(ValueError):
                     load_tools(file)
             file.write_text(json.dumps({"tools": [self.tools[0], self.tools[0]]}))
             with self.assertRaises(ValueError):
                 load_tools(file)
+
+    def test_configuration_accepts_other_claude_provider(self):
+        self.assertEqual({tool["id"] for tool in self.tools},
+                         {"codex", "openrouter", "claude-code", "claude-code-other"})
 
     def test_status_never_exposes_process_commands(self):
         tool = {"id": "test", "name": "Test", "rules": [{"type": "process", "names": ["test.exe"]}]}

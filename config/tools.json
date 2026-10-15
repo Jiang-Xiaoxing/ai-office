@@ -4,8 +4,7 @@
       "id": "codex",
       "name": "Codex",
       "rules": [
-        { "type": "recent_files", "root": "~/.codex/sessions", "pattern": "*.jsonl", "dated_directories": true, "lookback_days": 3, "active_seconds": 30 },
-        { "type": "process", "names": ["codex.exe", "codex"], "exclude": ["app-server", "exec-server", "mcp-server", "sandbox"] }
+        { "type": "process", "names": ["codex.exe", "codex"] }
       ]
     },
     {
@@ -20,6 +19,13 @@
       "name": "Claude Code (DeepSeek)",
       "rules": [
         { "type": "claude_session", "provider": "deepseek" }
+      ]
+    },
+    {
+      "id": "claude-code-other",
+      "name": "Claude Code",
+      "rules": [
+        { "type": "claude_session", "provider": "other" }
       ]
     }
   ]

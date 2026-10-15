@@ -6,52 +6,115 @@ here when a future tool offers a stronger activity signal.
 """
 import datetime
 import json
-import re
 import time
 from pathlib import Path
 
 import psutil
 
 
-CLAUDE_PROVIDERS = {"deepseek", "openrouter"}
-CLAUDE_LAUNCHER = re.compile(r'''(?:^|[/\s"'])cc-(deepseek|openrouter)\.cmd(?=$|[\s"'&|<>])''')
+# Non-secret environment keys used only to classify which API service a Claude
+# Code CLI is talking to, plus the model name for a "Flash" marker. Tokens and
+# other credentials are never read and never leave this module.
+CLAUDE_ENV_KEYS = (
+    "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL", "OR_MODEL",
+)
+CLAUDE_PROVIDERS = {"deepseek", "openrouter", "other"}
+
+
+def _read_env(pid):
+    """Read only the non-secret Claude Code environment keys for one PID."""
+    try:
+        environ = psutil.Process(pid).environ()
+    except (psutil.Error, OSError):
+        return {}
+    return {key: environ[key] for key in CLAUDE_ENV_KEYS if key in environ}
+
+
+def _classify_service(env, command):
+    """Resolve the API service from base URL, then model name, then command line."""
+    base_url = (env.get("ANTHROPIC_BASE_URL") or "").lower()
+    model = (env.get("ANTHROPIC_MODEL") or "").lower()
+    text = (command or "").lower().replace("\\", "/")
+    for needle in ("openrouter", "deepseek"):
+        if needle in base_url:
+            return needle
+    for needle in ("openrouter", "deepseek"):
+        if needle in model:
+            return needle
+    for needle in ("openrouter", "deepseek"):
+        if needle in text:
+            return needle
+    return None
+
+
+def _model_name(env):
+    for key in ("ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+                "CLAUDE_CODE_SUBAGENT_MODEL"):
+        value = (env.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _is_claude_cli(process):
+    name = process["name"].lower()
+    command = process["command"].lower().replace("\\", "/")
+    if name in {"claude.exe", "claude"}:
+        return True
+    return name in {"node.exe", "node"} and "@anthropic-ai/claude-code/" in command
+
+
+def _resolve_service(process, by_pid):
+    """Return (service, model) for a Claude Code CLI.
+
+    Read the CLI's own environment first; when that is unreadable or unmarked,
+    fall back to the nearest ancestors' environment and command lines. The
+    service is never inferred from a fixed launcher filename.
+    """
+    current = process
+    env = {}
+    seen = set()
+    for _ in range(32):
+        pid = current.get("pid")
+        if pid is not None:
+            if pid in seen:
+                break
+            seen.add(pid)
+            env.update(_read_env(pid))
+        service = _classify_service(env, current["command"])
+        if service:
+            return service, _model_name(env)
+        parent = by_pid.get(current.get("ppid"))
+        if parent is None:
+            break
+        # A reused PID must not attach a surviving CLI to an unrelated shell.
+        if (parent.get("created") is not None and current.get("created") is not None
+                and parent["created"] > current["created"]):
+            break
+        current = parent
+    return None, _model_name(env)
 
 
 def claude_session(rule, processes, now):
-    """Identify each Claude CLI by its nearest launch context, never by name alone.
+    """Report a live Claude Code CLI that matches `rule["provider"]`.
 
-    Only inspect command lines already in the local process snapshot. Do not read
-    launcher contents, environment variables or credentials. A wrapper without a
-    live Claude descendant, or an ambiguous/unmarked session, is not activity.
+    Any running Claude Code CLI counts as active. Its service is read from the
+    process environment (base URL / model name) and command line — never from a
+    fixed launcher filename — so new `cc-*.cmd` wrappers need no config changes.
+    A CLI whose service cannot be read falls back to the "other" Claude role.
     """
+    wanted = rule["provider"]
     by_pid = {p["pid"]: p for p in processes if p.get("pid") is not None}
     for process in processes:
-        name = process["name"].lower()
-        command = process["command"].lower().replace("\\", "/")
-        if name not in {"claude.exe", "claude"}:
-            if name not in {"node.exe", "node"} or not re.search(
-                    r"(?:^|/)@anthropic-ai/claude-code/", command):
-                continue
-        current, seen = process, set()
-        for _ in range(32):
-            pid = current.get("pid")
-            if pid is not None and pid in seen:
-                break
-            seen.add(pid)
-            providers = set(CLAUDE_LAUNCHER.findall(current["command"].lower().replace("\\", "/")))
-            if providers:
-                if providers == {rule["provider"]}:
-                    return True
-                break  # Another provider or both markers: never claim this CLI.
-            parent = by_pid.get(current.get("ppid"))
-            if parent is None:
-                break
-            # A reused PID must not attach a surviving CLI to an unrelated shell.
-            if (parent.get("created") is not None and current.get("created") is not None
-                    and parent["created"] > current["created"]):
-                break
-            current = parent
-    return False
+        if not _is_claude_cli(process):
+            continue
+        service, model = _resolve_service(process, by_pid)
+        if (service or "other") == wanted:
+            return {"service": service or "other", "model": model}
+    return None
 
 
 def process_matches(rule, processes, now):
@@ -88,7 +151,8 @@ def recent_files(rule, processes, now):
     return False
 
 
-# Extension point: callable(rule, processes, now) -> bool. Rules within a tool OR together.
+# Extension point: callable(rule, processes, now) -> bool or a match dict. Rules
+# within a tool OR together. A dict may carry extra display hints such as "model".
 RULE_DETECTORS = {"process": process_matches, "recent_files": recent_files,
                   "claude_session": claude_session}
 
@@ -112,6 +176,10 @@ def load_tools(path):
     return tools
 
 
+def _flash_detail(model):
+    return "Flash" if model and "flash" in model.lower() else None
+
+
 def detect_status(tools):
     now = time.time()
     processes = []
@@ -125,13 +193,20 @@ def detect_status(tools):
     agents = []
     for tool in tools:
         active = False
+        detail = None
         for rule in tool["rules"]:
             try:
-                if RULE_DETECTORS[rule["type"]](rule, processes, now):
-                    active = True
-                    break
+                result = RULE_DETECTORS[rule["type"]](rule, processes, now)
             except (OSError, psutil.Error):
                 continue
-        agents.append({"id": tool["id"], "name": tool["name"],
-                       "status": "working" if active else "idle"})
+            if not result:
+                continue
+            active = True
+            if isinstance(result, dict):
+                detail = _flash_detail(result.get("model"))
+            break
+        agent = {"id": tool["id"], "name": tool["name"], "status": "working" if active else "idle"}
+        if detail:
+            agent["detail"] = detail
+        agents.append(agent)
     return {"ts": int(now), "agents": agents}
