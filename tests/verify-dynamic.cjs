@@ -36,10 +36,27 @@ async function check(page,count) {
   for(const d of s.stations)if(d.furniture) {
     const pixels={x:d.furniture.x*4,y:d.furniture.y*4,w:d.furniture.w*4,h:d.furniture.h*4};
     boxes.slice(0,count).forEach(b=>assert(!overlaps(b,pixels),'labels do not cover added desks/computers'));
-    // Protected sofa and staircase areas in the native 480x270 grid.
-    for(const q of [{x:13,y:158,w:97,h:87},{x:114,y:187,w:32,h:39},{x:197,y:207,w:97,h:47}])
-      assert(!overlaps(d.furniture,q),'added furniture preserves lounge and stairs');
   }
+  // The sprite's transparent corners extend past the legs. Test visible pixels,
+  // not a rectangular box that would incorrectly include those empty corners.
+  const collisions=await page.evaluate(async()=>{
+    const s=officeDebug.snapshot(),meta=await fetch('static/assets/office-atlas.json').then(r=>r.json());
+    const atlas=new Image();atlas.src='static/assets/office-atlas.png';await atlas.decode();
+    const canvas=document.createElement('canvas');canvas.width=atlas.width;canvas.height=atlas.height;
+    const c=canvas.getContext('2d');c.drawImage(atlas,0,0);const pixels=c.getImageData(0,0,canvas.width,canvas.height).data;
+    const fixed=s.protected.filter(q=>!s.stations.some(d=>d.furniture&&d.furniture.x===q.x&&d.furniture.y===q.y));
+    const hits=[];
+    for(const d of s.stations.filter(d=>d.furniture))for(const [name,x,y] of [
+      ['desk',d.furniture.x,d.furniture.y],['chair',d.seat.x-13,d.seat.y-19]]) {
+      const [sx,sy,w,h]=meta[name];
+      for(let dy=0;dy<h;dy++)for(let dx=0;dx<w;dx++)if(pixels[((sy+dy)*canvas.width+sx+dx)*4+3]&&
+        fixed.some(q=>x+dx>=q.x&&x+dx<q.x+q.w&&y+dy>=q.y&&y+dy<q.y+q.h))hits.push([d.slot,name,x+dx,y+dy]);
+    }
+    return hits;
+  });
+  assert.deepEqual(collisions,[],'visible furniture preserves lounge, lamps, stairs, windows and shelves');
+  for(const q of s.protected)for(const b of boxes.slice(0,count))
+    assert(!overlaps(b,{x:q.x*4,y:q.y*4,w:q.w*4,h:q.h*4}),'labels preserve background furniture, lamps, windows and stairs');
   const atlas=JSON.parse(fs.readFileSync(path.join(ROOT,'static/assets/office-atlas.json'),'utf8'));
   for(const a of s.actors)for(const action of ['type','tea','read','sleep'])for(let f=0;f<4;f++)
     assert(atlas[`${a.sprite}-${action}-0-${f}`],`${a.sprite} has ${action} animation`);
@@ -62,15 +79,15 @@ async function capture(page,name) {
   page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='warning')warnings.push(m.text());});
   page.on('requestfailed',r=>requests.push({url:r.url(),error:r.failure()?.errorText}));
   try {
-    const live=process.argv.includes('--live5')?5:process.argv.includes('--live3')?3:0;
+    const live=process.argv.includes('--live6')?6:process.argv.includes('--live3')?3:0;
     if(live) {
       assert.equal(configured.length,live);
       await page.goto('http://127.0.0.1:8889/');await settled(page,live);
       const s=await check(page,live),api=await page.request.get('http://127.0.0.1:8889/api/status').then(r=>r.json());
       assert.deepEqual(s.tools.map(t=>t.id),configured.map(t=>t.id));
       assert.deepEqual(api.agents.map(t=>t.id),configured.map(t=>t.id));
-      if(live===5)for(const a of s.actors.slice(3))assert(a.monitorOn&&a.requested==='working','real explorer detector drives typing');
-      await capture(page,live===5?'attic-six':'attic-work');
+      if(live===6)for(const a of s.actors.slice(3))assert(a.monitorOn&&a.requested==='working','real explorer detector drives typing');
+      await capture(page,live===6?'attic-six':'attic-work');
       fs.writeFileSync(path.join(TMP,`live-${live}.json`),JSON.stringify(s,null,2));
       console.log(`PASS live restarted config: ${live} residents, matching labels/footer, nonoverlapping 1920x1080 4x screenshot`);
     } else {

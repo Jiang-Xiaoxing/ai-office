@@ -35,3 +35,12 @@
 - 临时向 `config/tools.json` 加入 A/B/C 三项测试工具，以实际存在的 `explorer.exe` 检测为干活，重启真实后端后截 `preview/attic-six.png`。不用浏览器伪造六人接口。
 - 保存原始配置字节，验收后原样恢复并核对 SHA-256，再次重启，截正常状态 `preview/attic-work.png`。两图为 1920×1080；只在截图浏览器固定晴天时刻以便核对家具，生产时钟不变。
 - 后端隐藏窗口运行且 `127.0.0.1:8889` 可用；只做本地简体中文 Git 提交，不提交 `preview/attic-bg-1.png`。
+
+## 本次实测结果
+
+- 检测回归 `test_detectors.py`（9 项）、`verify-office.cjs`、`verify-labels.cjs`、`weather-clock.cjs`、`verify-weather.cjs`、`verify-dynamic.cjs`、真实私人小站 `verify-site.cjs` 全部通过；`provider_scenarios.py` 由办公室测试调用。
+- `--live6` 实测六个角色，后三人均为 `working / type / monitorOn=true`；原三工具保留真实状态。`--live3` 在配置恢复及重启后通过。
+- `verify_screenshots.py` 四图通过：`attic-idle` / `attic-work` / `attic-weather` / `attic-six` 分别核对 116382 / 116382 / 116202 / 114294 个未被文字覆盖的 4×4 像素块，无平滑像素。
+- 配置恢复前后 SHA-256：`b51d91bf87bbd6120008cdcb025851e7248d9820f8d2288c0dffb3cea92805ee`；另以原始字节直接比较确认一致。背景与参考图也保持相同 SHA-256，图集连续两次构建结果一致。
+- 恢复后健康接口返回 `ok=true`，状态接口只含三个原工具；8889 仅监听 `127.0.0.1`，实际服务为 `pythonw.exe`，`MainWindowHandle=0`。
+- 截图测试增加“已连接且三人已加载”的等待条件，避免空数组被误判为所有人已休息，导致截图和文字遮罩不同步。

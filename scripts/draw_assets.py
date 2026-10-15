@@ -102,6 +102,43 @@ def furniture():
     box(d,(7,0,20,9),'#58716c',INK);box(d,(9,1,18,4),'#90a396')
     for x in (30,39):box(d,(x,3,x+5,9),'#eee0bd',INK)
 
+def attic_furniture():
+    """Reuse the approved room's furniture pixels, without copying its floor/wall.
+
+    These masks are measured on attic-bg-2's native grid. Keeping the atlas slots
+    the same size preserves every resident frame and all existing metadata.
+    """
+    background = Image.open(OUT / 'attic-bg-2.png').convert('RGBA')
+    native = background.resize((480, 270), Image.Resampling.NEAREST)
+    assert native.resize(background.size, Image.Resampling.NEAREST).tobytes() == background.tobytes()
+
+    def cutout(name, origin, size, polygons, shadow):
+        im, d = art(name, size)
+        d.ellipse(shadow, fill=(88, 57, 39, 36))
+        mask = Image.new('L', size)
+        md = ImageDraw.Draw(mask)
+        ox, oy = origin
+        for polygon in polygons:
+            md.polygon([(x-ox, y-oy) for x,y in polygon], fill=255)
+        source = native.crop((ox, oy, ox+size[0], oy+size[1]))
+        im.paste(source, (0, 0), mask)
+
+    cutout('desk', (58, 63), (78, 48), [
+        [(58,74),(134,74),(134,99),(58,99)],
+        [(81,63),(109,63),(109,82),(81,82)],
+        [(64,71),(74,71),(74,85),(64,85)],
+        [(117,73),(119,73),(119,70),(121,70),(122,73),(124,73),
+         (125,68),(127,68),(127,71),(129,71),(129,77),(127,80),
+         (128,82),(127,86),(120,86),(118,84),(118,79),(117,77)],
+        [(60,99),(65,99),(65,108),(60,108)],
+        [(125,99),(130,99),(130,108),(125,108)],
+    ], (1, 39, 77, 47))
+    cutout('chair', (83, 99), (26, 27), [
+        [(85,100),(104,100),(104,102),(106,102),(106,115),
+         (104,117),(104,121),(100,121),(100,118),(90,118),
+         (90,121),(85,121),(85,117),(83,115),(83,102),(85,102)],
+    ], (0, 20, 25, 26))
+
 PALETTES = [
     dict(id='moss',hair='#394352',highlight='#637080',shirt='#81aa9a',shade='#4d7d78',skin='#e9bd94',shadow='#bd886c',style='glasses'),
     dict(id='sky',hair='#583b35',highlight='#a57454',shirt='#84a5c3',shade='#556d93',skin='#b9805e',shadow='#955b49',style='curls'),
@@ -178,6 +215,7 @@ def character(p,action,direction,frame):
     if side and direction==1:sprites[key]=im.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
 
 furniture()
+attic_furniture()
 for palette in PALETTES:
     for direction in range(4):
         for frame in range(4):character(palette,'walk',direction,frame)

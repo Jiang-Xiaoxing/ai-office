@@ -4,6 +4,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'D:/tools/PixelAgents/no
 const ROOT=path.resolve(__dirname,'..'),TMP=path.join(ROOT,'.browser-tmp');fs.mkdirSync(TMP,{recursive:true});
 async function labelsFit(page) {
   const rects=await page.locator('.nameplate').evaluateAll(els=>els.map(el=>{const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};}));
+  assert.equal(rects.length,3,'capture only after all three resident labels exist');
   const size=page.viewportSize();
   const s=await page.evaluate(()=>window.officeDebug.snapshot()),room=await page.locator('#game').boundingBox();
   rects.forEach((a,i)=>{
@@ -34,7 +35,10 @@ async function capture(page,name) {
         name:['Codex','Claude Code (OpenRouter)','Claude Code (DeepSeek)'][i],status:mode}))}}));
     await context.addInitScript(()=>{Math.random=()=>.01;Date.now=()=>Date.parse('2026-10-15T01:00:00Z');});
     const page=await context.newPage();await page.goto('http://127.0.0.1:8889/');
-    await page.waitForFunction(()=>window.officeDebug?.snapshot().actors.every(a=>['sleep','tea','read'].includes(a.mode)));
+    await page.waitForFunction(()=>{
+      const s=window.officeDebug?.snapshot();
+      return s?.connected&&s.actors.length===3&&s.actors.every(a=>['sleep','tea','read'].includes(a.mode));
+    });
     await labelsFit(page);await capture(page,'attic-idle');
     mode='working';await page.waitForFunction(()=>window.officeDebug.snapshot().actors.every(a=>a.mode==='type'),null,{timeout:22000});
     await labelsFit(page);await capture(page,'attic-work');

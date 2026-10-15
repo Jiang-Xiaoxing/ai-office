@@ -3,7 +3,7 @@ from PIL import Image
 import json
 import sys
 root = Path(__file__).resolve().parents[1]
-for name in sys.argv[1:] or ('attic-idle.png', 'attic-work.png', 'attic-weather.png'):
+for name in sys.argv[1:] or ('attic-idle.png', 'attic-work.png', 'attic-weather.png', 'attic-six.png'):
     im = Image.open(root / 'preview' / name).convert('RGB')
     assert im.size == (1920, 1080), im.size
     # Run the matching browser capture first to record each image's HTML overlay bounds.

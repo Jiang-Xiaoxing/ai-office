@@ -35,14 +35,29 @@
       { seat: { x: 384, y: 118 }, screen: { x: 372, y: 66, w: 23, h: 13 } },
       { seat: { x: 406, y: 237 }, screen: { x: 394, y: 184, w: 23, h: 13 } },
       ...[176, 260, 344].map(x => ({ seat: { x, y: 179 },
-        screen: { x: x - 11, y: 126, w: 23, h: 13 },
-        furniture: { x: x - 39, y: 122, w: 78, h: 62 },
-        block: { x: x - 39, y: 133, w: 78, h: 34 } })),
+        screen: { x: x - 12, y: 127, w: 23, h: 13 },
+        furniture: { x: x - 38, y: 124, w: 78, h: 63 },
+        block: { x: x - 38, y: 138, w: 77, h: 27 } })),
     ];
     const desks = actors.map(a => ({ ...slots[a.slot], id: a.id, slot: a.slot }));
     return {
       ...ROOM,
       desks,
+      // Visual extents differ from floor collision footprints. Labels must also
+      // preserve the room's original furnishings, not just the generated desks.
+      protected: [
+        { x: 58, y: 63, w: 78, h: 60 }, { x: 345, y: 63, w: 77, h: 60 },
+        { x: 368, y: 180, w: 77, h: 61 }, // original desks and chairs
+        { x: 13, y: 151, w: 20, h: 54 }, // floor lamp
+        { x: 30, y: 173, w: 80, h: 70 }, { x: 114, y: 183, w: 31, h: 45 },
+        { x: 197, y: 207, w: 97, h: 47 }, // stairs and flanking plants
+        { x: 430, y: 74, w: 37, h: 65 }, { x: 177, y: 52, w: 42, h: 42 },
+        { x: 90, y: 17, w: 66, h: 37 }, { x: 326, y: 19, w: 62, h: 35 },
+        { x: 228, y: 20, w: 24, h: 23 }, // pendant and windows
+        { x: 27, y: 76, w: 29, h: 36 }, { x: 445, y: 181, w: 24, h: 49 },
+        { x: 221, y: 40, w: 53, h: 52 }, // rear plant nook
+        ...desks.filter(d => d.furniture).map(d => d.furniture),
+      ],
       blocks: [
         { x: 58, y: 77, w: 77, h: 27 },
         { x: 345, y: 77, w: 77, h: 27 },
@@ -60,8 +75,8 @@
       spots: [
         { x: 62, y: 208, action: 'sleep' }, { x: 94, y: 202, action: 'sleep' },
         { x: 92, y: 242, action: 'tea' }, { x: 174, y: 225, action: 'tea' },
-        { x: 132, y: 215, action: 'read' }, { x: 184, y: 184, action: 'read' },
-        { x: 310, y: 244, action: 'read' }, { x: 350, y: 210, action: 'tea' },
+        { x: 132, y: 215, action: 'read' }, { x: 310, y: 225, action: 'read' },
+        { x: 310, y: 244, action: 'read' }, { x: 350, y: 225, action: 'tea' },
         { x: 42, y: 148, action: 'tea' },
       ],
     };
@@ -72,7 +87,7 @@
     // The supplied PNG is an exact 4x nearest-neighbor enlargement of this grid.
     c.drawImage(background,0,0,ROOM.w,ROOM.h);
     for(const d of layout.desks)if(d.furniture) {
-      sprite('chair',d.seat.x-13,d.seat.y-22,c);
+      sprite('chair',d.seat.x-13,d.seat.y-19,c);
       sprite('desk',d.furniture.x,d.furniture.y,c);
     }
     weather=AtticWeather.create(scene);
@@ -234,14 +249,18 @@
     const overlaps=(p,q)=>p.x<q.x+q.w+3&&p.x+p.w+3>q.x&&p.y<q.y+q.h+3&&p.y+p.h+3>q.y;
     const plates=actors.map(a=>({a,w:a.label.offsetWidth,h:a.label.offsetHeight,
       cx:layout.ox+Math.round(a.x)*scale,y:layout.oy+(Math.round(a.y)+2)*scale+12}));
+    // Typing frames change the sprite, not its bounds. Reuse placement while
+    // everyone is still, rather than solve the same furniture avoidance at 60Hz.
+    const key=[ww,wh,scale,top,bottom,...actors.flatMap((a,i)=>[
+      Math.round(a.x),Math.round(a.y),a.mode,plates[i].w,plates[i].h])].join('|');
+    if(labels.layoutKey===key)return;labels.layoutKey=key;
+    const furniture=layout.protected.map(d=>({
+      x:layout.ox+d.x*scale,y:layout.oy+d.y*scale,w:d.w*scale,h:d.h*scale}));
     const placed=[];
     for(const p of plates.sort((a,b)=>a.y-b.y||a.a.index-b.a.index)) {
-      const clampX=x=>Math.max(6,Math.min(ww-p.w-6,x));
+      const clampX=x=>Math.max(2,Math.min(ww-p.w-2,x));
       const x=clampX(p.cx-p.w/2);
       const desired=Math.min(bottom-p.h,p.y);
-      const furniture=layout.desks.filter(d=>d.furniture).map(d=>({
-        x:layout.ox+d.furniture.x*scale,y:layout.oy+d.furniture.y*scale,
-        w:d.furniture.w*scale,h:d.furniture.h*scale}));
       const obstacles=[...bodies,...furniture,...placed];
       const ys=[desired,...obstacles.flatMap(q=>[q.y+q.h+6,q.y-p.h-6])];
       const xs=[x,...obstacles.flatMap(q=>[clampX(q.x-p.w-6),clampX(q.x+q.w+6)])];
@@ -273,7 +292,7 @@
     updateLabels();requestAnimationFrame(render);
   }
   function createLabels() {
-    labels.replaceChildren();
+    labels.replaceChildren();labels.layoutKey=null;
     for(const a of actors) {
       const el=document.createElement('div');el.className='nameplate';el.style.setProperty('--agent-color',a.color);
       el.title=a.rosterName;
@@ -334,6 +353,7 @@
         target:initialized?destination(a):null,walkable:initialized?walkable(a.x,a.y):false,
         monitorOn:a.mode==='type'&&a.requested==='working'})),
       obstacles:layout?.blocks.map(b=>({...b})),stations:layout?.desks.map(d=>({...d})),
+      protected:layout?.protected.map(b=>({...b})),
       spots:layout?.spots.map(p=>({...p,walkable:walkable(p.x,p.y)})),
     }),
   }),writable:false});
