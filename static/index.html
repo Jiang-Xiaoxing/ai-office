@@ -4,17 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI 办公室 · 姜小星</title>
-<meta name="theme-color" content="#203c45">
+<meta name="theme-color" content="#292a3d">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23203c45' d='M0 0h32v32H0z'/%3E%3Cpath fill='%23dfbb77' d='M5 7h22v15H5zM8 25h16v3H8z'/%3E%3Cpath fill='%2367b5ad' d='M8 10h16v9H8z'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="static/office.css">
 </head>
 <body>
 <header id="bar">
-  <div class="identity"><span class="office-icon" aria-hidden="true"></span><h1>AI 办公室</h1><span class="owner">姜小星的像素小屋</span></div>
+  <div class="identity"><span class="office-icon" aria-hidden="true"></span><h1>AI 办公室</h1><span class="owner">姜小星的阁楼工作室</span></div>
   <div class="connection"><span id="signal" class="signal"></span><span id="connection">正在连接</span><time id="ts">--:--:--</time></div>
 </header>
-<main id="wrap" aria-label="像素办公室，角色会根据工具状态走到工位或休息区">
+<main id="wrap" aria-label="温馨阁楼工作室，伙伴们干活时回工位，空闲时看书、喝茶或打盹">
   <canvas id="game" role="img" aria-label="正在布置办公室"></canvas>
+  <div id="labels" aria-hidden="true"></div>
   <div id="loading" role="status">正在布置办公室…</div>
   <div id="notice" role="status" hidden></div>
 </main>

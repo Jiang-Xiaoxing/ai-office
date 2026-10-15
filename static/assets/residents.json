@@ -1,0 +1,62 @@
+[
+  {
+    "id": "moss",
+    "hair": "#394352",
+    "highlight": "#637080",
+    "shirt": "#81aa9a",
+    "shade": "#4d7d78",
+    "skin": "#e9bd94",
+    "shadow": "#bd886c",
+    "style": "glasses"
+  },
+  {
+    "id": "sky",
+    "hair": "#583b35",
+    "highlight": "#a57454",
+    "shirt": "#84a5c3",
+    "shade": "#556d93",
+    "skin": "#b9805e",
+    "shadow": "#955b49",
+    "style": "curls"
+  },
+  {
+    "id": "sun",
+    "hair": "#9d5948",
+    "highlight": "#d68b60",
+    "shirt": "#e2ba6e",
+    "shade": "#b08250",
+    "skin": "#f0c9a0",
+    "shadow": "#ca9576",
+    "style": "bob"
+  },
+  {
+    "id": "lilac",
+    "hair": "#4a3652",
+    "highlight": "#816482",
+    "shirt": "#b39ac4",
+    "shade": "#7f6b9a",
+    "skin": "#d7a782",
+    "shadow": "#a6745a",
+    "style": "bun"
+  },
+  {
+    "id": "rose",
+    "hair": "#d6c4a0",
+    "highlight": "#f0dfb7",
+    "shirt": "#c5838b",
+    "shade": "#995f76",
+    "skin": "#81553f",
+    "shadow": "#654332",
+    "style": "crop"
+  },
+  {
+    "id": "fern",
+    "hair": "#414943",
+    "highlight": "#788069",
+    "shirt": "#9cb47a",
+    "shade": "#6e895e",
+    "skin": "#d6a47d",
+    "shadow": "#ae795e",
+    "style": "cap"
+  }
+]

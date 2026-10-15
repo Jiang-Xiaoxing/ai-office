@@ -1,0 +1,2 @@
+# Only needed when rebuilding the original sprites, not when running the office.
+Pillow==9.5.0

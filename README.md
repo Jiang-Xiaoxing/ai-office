@@ -1,106 +1,100 @@
-# AI 办公室
+﻿# AI 办公室
 
-像素 RPG 风格的 AI 工具状态看板，主人姜小星。
+姜小星的温馨阁楼工作室，一个独立运行的像素 AI 工具状态看板。斜屋顶、晚间天窗、暖灯、木地板和三张错落的书桌，像小伙伴们在家里的楼上一起干活。
 
-一眼看到电脑上的 AI 工具（Codex / CodeBuddy / Claude Code）是在干活还是摸鱼。干活的角色在工位敲键盘，空闲的去喝茶。
+Codex、CodeBuddy、Claude Code（DeepSeek）各有一个原创像素角色。干活时沿家具间的通道走回自己的座位，坐下敲键盘，显示器亮起；空闲时离开工位，在看书、喝茶、打盹之间随机切换。前端每 3 秒读取一次 `api/status`，断线时保留最后一次状态并自动重连。
 
-## 怎么启动
+## 本机使用
 
-**方法一：双击 `start.vbs`**
-后端隐藏窗口后台运行，绝不弹终端。等 1~2 秒后浏览器打开 `http://127.0.0.1:8889/`。
+双击 `start.vbs` 启动，浏览器打开 **http://127.0.0.1:8889/**。双击 `stop.vbs` 停止。脚本以隐藏窗口运行；不会设置开机自启或修改系统代理。
 
-**方法二：命令行**
-```bash
-D:\ai-office\venv\Scripts\pythonw.exe D:\ai-office\server_app.py
-```
-然后浏览器访问 `http://127.0.0.1:8889/`。
+已有私人小站的入口为导航栏「AI 办公室」，路径 `/office/`。这个小站入口由小站自己的登录保护；本项目不依赖小站、登录或特定账号。
 
-## 怎么停止
+| 接口 | 用途 |
+| --- | --- |
+| `/` | 阁楼画面 |
+| `/api/status` | 工具状态及 Unix 时间戳 |
+| `/api/healthz` | 本机健康检查 |
 
-双击 `stop.vbs`，或在任务管理器结束 `pythonw.exe`（命令行含 `ai-office\server_app.py`）。
+**默认只监听 `127.0.0.1:8889`，不自带登录。需要外网访问时，请自行配置反向代理、HTTPS 和访问认证。** 不要直接把无认证后端暴露到公网。
 
-## 地址
+反向代理可将 `/office/` 转发到 `http://127.0.0.1:8889/`，去掉前缀；将 `/office` 重定向到 `/office/`。HTML 中的样式、脚本、图集和 `api/status` 都使用相对地址，直接访问与前缀访问均正常。项目没有跨域代理或第三方服务依赖。
 
-| 用途 | 地址 |
-|------|------|
-| 前端看板 | http://127.0.0.1:8889/ |
-| 状态接口 | http://127.0.0.1:8889/api/status |
-| 健康检查 | http://127.0.0.1:8889/api/healthz |
-| 小站登录入口 | https://laptop-ubv43gdg.tail2aec95.ts.net/office/ |
-| 小站代理状态接口 | https://laptop-ubv43gdg.tail2aec95.ts.net/office/api/status |
+## 安装与运行依赖
 
-后端绑 `127.0.0.1:8889`，外网不可达。从小站 `D:\studio` 的导航栏「AI 办公室」入口也能跳过来（不绕开小站登录保护）。
+本机已经有 D 盘虚拟环境，无需重装。其他 Windows 机器可使用自己的真实 Python 安装路径替换下面的 `D:\AITools\py312\python.exe`，不要使用指向 Microsoft Store 的空壳命令。
 
-小站将 `/office` 重定向到 `/office/`，再反代至本机 8889；页面的脚本、图片和接口地址须使用相对路径（例如 `static/office.js`、`api/status`），以同时支持直接访问与小站前缀。小站代理在现有登录校验之后执行，本机直接访问 `8888/office` 也需要有效的网关凭据。
-
-## 状态检测原理
-
-| 工具 | 检测方式 |
-|------|----------|
-| Codex | 扫 `~/.codex/sessions` 近 3 天的 `.jsonl` 会话文件，30 秒内修改过=干活；也看 `codex.exe` 进程（排除 app-server / exec-server 等后台子进程） |
-| CodeBuddy | `node.exe` 进程命令行含 `codebuddy-code/bin/codebuddy` = 干活 |
-| Claude Code | `claude.exe` 进程存在 = 干活 |
-
-网页每 3 秒轮询 `/api/status`，前端 Canvas 重绘角色动画。状态变化后，角色从当前位置沿四方向路线走到自己的工位或休息区；到达工位才坐下打字。路线按家具碰撞区域寻路，角色不会穿桌子或瞬移。空闲角色喝茶、等待和闲逛，三个人有独立站位。
-
-画面使用项目原创 PNG 精灵图：木纹地板、织纹地毯、电脑键盘、椅子、书架、挂画、沙发、茶几、咖啡柜、文件柜和绿植。三个人分别有眼镜与深色短发、浅棕发与蓝色外套、红棕发与金色外套；Claude Code 同时标注 `(DeepSeek)`。走路每个方向 4 帧，打字、喝茶、等待分别 4 帧。
-
-画布关闭图像平滑，按整数倍显示。布局随窗口尺寸重新安排，竖屏时工作室在上、茶水间在下，保持三个工位和休息区可见。素材与接口全部使用相对地址，支持小站 `/office/` 前缀。连接失败时保留上次状态并继续重试。
-
-## 怎么加新工具
-
-编辑 `server_app.py`，在 `TOOLS` 列表里加一个 dict：
-
-```python
-TOOLS = [
-    {"id": "codex",       "name": "Codex",       "check": _check_codex},
-    {"id": "codebuddy",   "name": "CodeBuddy",   "check": _check_codebuddy},
-    {"id": "claude-code", "name": "Claude Code", "check": _check_claude_code},
-    # 新增：
-    {"id": "your-tool",   "name": "你的工具",     "check": _check_your_tool},
-]
+```powershell
+& 'D:\AITools\py312\python.exe' -m venv 'D:\ai-office\venv'
+& 'D:\ai-office\venv\Scripts\python.exe' -m pip install --cache-dir 'D:\pip_cache' -r 'D:\ai-office\requirements.txt'
 ```
 
-`_check_your_tool()` 是一个无参数函数，返回 `True`（干活中）或 `False`（空闲）。用 `psutil.process_iter` 查进程、`os.path.getmtime` 查文件修改时间等。
+第一行：`&` 执行引号中的程序；`-m` 表示运行 Python 模块，`venv` 创建隔离环境，末尾路径为 D 盘环境目录。第二行：`pip install` 安装依赖；`--cache-dir` 把下载缓存放在 D 盘；`-r` 从 `requirements.txt` 读取依赖清单。这些命令会下载并写入 D 盘文件，不修改系统代理或开机自启。安装后使用 `start.vbs` 隐藏启动即可。
 
-前端 `static/office.js` 的 `DESKS` 数组也要加一个工位配置（`id` 要和后端一致），设置 `name`、`sprite` 和 `color`。`sprite` 可先复用现有角色 `codex`、`codebuddy` 或 `claude-code`；随后在 `roomLayout()` 中为新角色安排独立工位、休息站位和碰撞区域。新工具检测器的后端注册接口保持不变。
+后端运行只需 FastAPI、Uvicorn、psutil；不需要 Pillow 或浏览器自动化依赖。`requirements.txt` 记录本次已实测的运行版本。
 
-## 素材与自查
+## 检测清单与扩展接口
 
-`scripts/draw_assets.py` 保存所有原创像素素材的绘制逻辑，输出 `static/assets/office-atlas.png` 和 `office-atlas.json`。当前图集有 106 个精灵，包括 84 个角色动画帧。只在重新绘制素材时需要 Pillow，后端运行不需要它。
+统一配置：**`config/tools.json`**。每个工具包含唯一 `id`、显示 `name` 和 `rules`。同一工具的多条规则是“任一命中即干活”。修改配置后重启办公室生效。
 
-`tests/verify-office.cjs` 使用现有的本地 Playwright 与无头 Edge 验证：独立站位、喝茶和打字帧变化、状态切换连续行走、家具碰撞、休息区往返、闲逛、混合状态、断线恢复、3 秒刷新、手机/平板/桌面布局及 `/office/` 相对路径。模拟状态只在测试浏览器中拦截接口，不修改真实检测器，也没有给生产页面添加模拟开关。
+| 工具 | 当前识别规则 |
+| --- | --- |
+| Codex | `~/.codex/sessions/YYYY/MM/DD/*.jsonl` 近 3 天目录内、最近 30 秒修改的会话；或 `codex.exe` / `codex`，排除命令行中的 `app-server`、`exec-server`、`mcp-server`、`sandbox` |
+| CodeBuddy | `node.exe` / `node`，命令行同时包含 `codebuddy-code`、`bin`、`codebuddy`；或原生 `codebuddy.exe` / `codebuddy` |
+| Claude Code（DeepSeek） | 原生 `claude.exe` / `claude`；或 `node.exe` / `node`，命令行同时包含 `@anthropic-ai`、`claude-code` |
 
-运行自查用 `node tests/verify-office.cjs`：`node` 是 JavaScript 运行程序，后面的相对路径指向本项目的验收脚本；它只启动隐藏的无头浏览器、读取本机办公室并写截图，不改变系统设置或真实工具状态。默认复用 `D:/tools/PixelAgents/node_modules/playwright`，可通过 `PLAYWRIGHT_MODULE` 指定已有安装位置；`OFFICE_BROWSER` 可指定浏览器程序位置。
+`process` 规则用 `names` 指定进程名；可用 `contains_all` 要求命令行包含所有片段，用 `exclude` 排除后台服务。`recent_files` 规则用 `root`、`pattern`、`active_seconds` 设置文件活动窗口，可用 `dated_directories` 和 `lookback_days` 扫日期目录。
 
-最终截图：`preview/final-idle.png`（全部空闲）、`preview/final-work.png`（全部干活）。测试过程的手机截图和失败诊断只写到被 Git 忽略的 `.browser-tmp/`，交付前清理。
+检测保留原有语义：**CLI 进程存在也计作干活，包含等待输入的时间；会话文件刚更新属于活动推断。** 这不是模型逐 token 生成的精确检测，也不判断 Claude 的实际模型提供商。进程命令行只在本机内存匹配，接口仅返回工具 ID、名字和状态。
+
+未来加工具先在配置里加一项即可扩展后端接口。需要特殊检测方式时，在 `detectors.py` 的 `RULE_DETECTORS` 注册 `callable(rule, processes, now) -> bool`。新增可见角色还需要开发者在 `static/office.js` 的 `DESKS`、`roomLayout()` 安排工位、素材和休息位置；本次不提供“自定义添加人物”的界面。
+
+## 原创画面与素材
+
+所有家具和人物均由 `scripts/draw_assets.py` 原创绘制，屋顶、天窗、灯串、地板、地毯和楼梯由 Canvas 绘制；没有下载或复制外部美术素材。图集包含 **225 个精灵，6 套人物各 36 帧**：四方向行走、敲键盘、喝茶、看书、打盹和站立。
+
+`static/assets/residents.json` 保存配色与发型；`resident-*.png` 保存六个人物单独的站立图。当前使用 moss（眼镜、绿衣）、sky（卷发、蓝衣）、sun（短波波头、黄衣），备用 lilac（发髻）、rose（浅色短发）、fern（帽子）。绘制脚本使用固定种子，构建结果可复现。
+
+1920×1080、浏览器 100% 缩放下，画布为 **480×244 原始像素，以 4 倍整数显示**，角色精灵框为 104×144 屏幕像素，桌子为 312×192；整间阁楼无需拖动。画布关闭平滑，屋顶斜线也采用逐像素绘制。其他窗口按整数倍重新计算房间尺寸，手机竖屏重新排列家具；名字使用独立文本标签保持可读。减少动态效果的系统偏好会减少原地动作，状态变化仍保留连续行走。
+
+重绘素材仅需现有 D 盘 Python 与 Pillow；生成结果已提交，正常运行无需重绘。
+
+```powershell
+& 'D:\AITools\py312\python.exe' 'D:\ai-office\scripts\draw_assets.py'
+```
+
+这个命令运行素材绘制脚本，覆盖本项目 `static/assets/` 下的图集、人物 PNG 和人物配置，不连接外网。若重绘机器缺少 Pillow，可按前面的安装方式读取 `requirements-art.txt`，缓存仍指定 D 盘。
+
+## 验证与交付截图
+
+```powershell
+& 'D:\ai-office\venv\Scripts\python.exe' 'D:\ai-office\tests\test_detectors.py'
+node tests/verify-office.cjs
+```
+
+第一行使用隔离环境运行检测回归，验证进程白名单、后台排除、文件活动窗口、配置错误以及真实本机接口。临时文件只写本项目 `.browser-tmp/`，不启动或停止其他工具。
+
+第二行中的 `node` 是 JavaScript 运行程序；`tests/verify-office.cjs` 是浏览器验收脚本，应在项目目录执行。脚本启动隐藏的无头 Edge，临时拦截浏览器中的状态请求，验证连续行走、家具碰撞、随机休息活动、打字帧、显示器、断线恢复、3 秒刷新、桌面/手机布局及 `/office/` 相对资源。模拟状态不写入后端，生产页面不含模拟开关。
+
+浏览器测试默认复用 `D:/tools/PixelAgents/node_modules/playwright` 与系统 Edge；可用环境变量 `PLAYWRIGHT_MODULE`、`OFFICE_BROWSER` 指向其他已有安装。`tests/verify-site.cjs` 可在提供现有小站凭据的进程内环境下，只读验证真实小站反代和登录边界；不生成或保存凭据。
+
+最终截图均为 **1920×1080**：
+
+- `preview/attic-idle.png`：全部空闲，各自在阁楼休息。
+- `preview/attic-work.png`：全部干活，全部到位、显示器亮起。
+
+手机和失败诊断图仅写入 `.browser-tmp/`，交付前清理；`preview/rpg2.png` 为保留的历史参考图，不是素材来源。
 
 ## 文件结构
 
+```text
+server_app.py          独立 FastAPI 后端，只监听本机 8889
+config/tools.json      工具检测规则清单
+detectors.py           配置校验、规则匹配和扩展接口
+static/                Canvas 场景、样式、六套原创像素人物
+scripts/draw_assets.py 可复现的原创素材绘制脚本
+tests/                 检测回归与隐藏浏览器验收
+preview/               最终两张截图及保留的 rpg2.png
+start.vbs / stop.vbs   本机隐藏启停
+requirements*.txt     运行依赖 / 可选素材构建依赖
 ```
-D:\ai-office\
-  server_app.py       # FastAPI 后端 (端口 8889, 绑 127.0.0.1)
-  static/
-    index.html        # 像素看板页面
-    office.js         # Canvas 正俯视 RPG 像素画 + 角色动画
-    office.css        # 自适应页面与状态栏
-    assets/           # 原创 PNG 精灵图集与坐标元数据
-  scripts/
-    draw_assets.py    # 可复现的像素素材绘制脚本
-  tests/
-    verify-office.cjs # 无头浏览器验收
-  start.vbs            # 隐藏窗口启动脚本
-  stop.vbs             # 停止脚本
-  venv/                # Python 虚拟环境 (fastapi + uvicorn + psutil)
-  .gitignore
-  README.md            # 本文件
-  preview/             # 参考图 (画风参考, 非素材来源)
-```
-
-## 规矩
-
-- 所有程序隐藏窗口后台跑，绝不弹终端。
-- 不设开机自启。
-- 不改系统设置。
-- 临时文件用完删掉。
-- 不推送（本地 git 提交即可）。
