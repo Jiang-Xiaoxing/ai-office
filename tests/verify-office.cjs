@@ -21,15 +21,40 @@ async function checkFit(page) {
   assert(Number.isInteger(s.zoom));assert.equal(s.smoothing,false);
   assert(box.x>=room.x&&box.y>=room.y&&box.x+box.width<=room.x+room.width+.01&&box.y+box.height<=room.y+room.height+.01,'entire room fits');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth||document.documentElement.scrollHeight>innerHeight),false);
+  const bars=await page.locator('#bar,#footer').evaluateAll(els=>els.map(el=>{
+    const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
+  }));
+  const overlaps=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+  const text=await page.locator('h1,.owner,#weather,#connection,#ts,.agent-status,.agent-status em,.local,.refresh').evaluateAll(els=>els.map(el=>{
+    const b=el.getBoundingClientRect();return {size:parseFloat(getComputedStyle(el).fontSize),x:b.x,y:b.y,w:b.width,h:b.height};
+  }));
+  for(const t of text) {
+    assert(t.size>=18,`bar text stays readable: ${t.size}px`);
+    assert(t.w>0&&t.h>0&&t.x>=0&&t.y>=0&&t.x+t.w<=page.viewportSize().width+.01&&t.y+t.h<=page.viewportSize().height+.01,'bar text stays visible');
+  }
+  if(page.viewportSize().width===1920&&page.viewportSize().height===1080) {
+    assert.equal(s.zoom,4);assert.equal(s.sample,1);assert.equal(s.pixelScale,4);
+    assert.deepEqual(box,{x:0,y:0,width:1920,height:1080},'4x canvas fills one screen');
+    assert.equal(await page.locator('h1').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),28);
+    assert(bars[0].h<=44&&bars[1].h<=36,'desktop bars stay thin');
+  }
   for(const a of s.actors)assert(a.walkable,`${a.id} blocked ${a.x},${a.y}`);
   for(const p of s.spots)assert(p.walkable,`leisure destination blocked ${p.x},${p.y}`);
   const plates=await page.locator('.nameplate').evaluateAll(els=>els.map(e=>{const b=e.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};}));
-  for(const p of plates)assert(p.x>=0&&p.y>=room.y&&p.x+p.w<=room.width&&p.y+p.h<=room.y+room.height,'nameplate fits');
+  for(const p of plates) {
+    assert(p.x>=0&&p.y>=room.y&&p.x+p.w<=room.width&&p.y+p.h<=room.y+room.height,'nameplate fits');
+    assert(bars.every(b=>!overlaps(p,b)),'bars must not cover nameplates');
+  }
   plates.forEach((p,i)=>plates.slice(i+1).forEach(q=>assert(!(p.x<q.x+q.w&&p.x+p.w>q.x&&p.y<q.y+q.h&&p.y+p.h>q.y),'nameplates must not overlap')));
   for(const a of s.actors) {
     const q={x:box.x+(Math.round(a.x)-13)*s.pixelScale,y:box.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,
       w:26*s.pixelScale,h:36*s.pixelScale};
+    assert(bars.every(b=>!overlaps(q,b)),'bars must not cover residents');
     for(const p of plates)assert(!(p.x<q.x+q.w&&p.x+p.w>q.x&&p.y<q.y+q.h&&p.y+p.h>q.y),'nameplates must not cover a resident');
+  }
+  for(const d of s.stations) {
+    const screen={x:box.x+d.screen.x*s.pixelScale,y:box.y+d.screen.y*s.pixelScale,w:d.screen.w*s.pixelScale,h:d.screen.h*s.pixelScale};
+    assert(bars.every(b=>!overlaps(screen,b)),'bars must not cover workstations');
   }
   if(page.viewportSize().width===1920) {
     const fonts=await page.locator('.nameplate strong,.nameplate small,.nameplate span').evaluateAll(els=>els.map(e=>parseFloat(getComputedStyle(e).fontSize)));
@@ -92,7 +117,7 @@ async function watchTravel(page,work) {
   });
   try {
     await page.goto('http://127.0.0.1:8889/',{waitUntil:'networkidle'});await arrive(page,false);
-    await checkFit(page);let s=await read(page);assert.equal(s.zoom,3);
+    await checkFit(page);let s=await read(page);assert.equal(s.zoom,4);
     assert.equal(s.width,480);assert.equal(s.height,270);assert.equal(s.sample,1);
     assert.equal(s.background,'static/assets/attic-bg-2.png');
     assert(fs.readFileSync(path.join(ROOT,'static/assets/attic-bg-2.png')).equals(fs.readFileSync(path.join(ROOT,'preview/attic-bg-2.png'))),'background copied unchanged');
@@ -102,7 +127,7 @@ async function watchTravel(page,work) {
     assert(s.actors.every(a=>!a.monitorOn));
     // All three residents must contribute nontransparent pixels, including the reading chair.
     await page.screenshot({path:path.join(ROOT,'preview/attic-idle.png')});
-    console.log('PASS 1920x1080 idle: 3x pixels between header/footer, three leisure animations, entire room fits');
+    console.log('PASS 1920x1080 idle: 4x pixels fill one screen, thin readable bars, three leisure animations');
     mode='working';await page.waitForFunction(()=>window.officeDebug.snapshot().actors.every(a=>a.requested==='working'));
     assert((await read(page)).actors.some(a=>a.mode==='walk'));
     assert(await watchTravel(page,true)>0);await arrive(page,true);await checkFit(page);s=await read(page);

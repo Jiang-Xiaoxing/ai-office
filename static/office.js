@@ -180,8 +180,10 @@
       el.classList.toggle('working',a.requested==='working');
     }
     const ww=wrap.clientWidth,wh=wrap.clientHeight,scale=layout.pixelScale;
-    // The room now occupies its own row between the header and footer.
-    const top=6,bottom=wh-6;
+    // Desktop bars overlay the room edges; wrapped mobile bars occupy their own rows.
+    const room=wrap.getBoundingClientRect();
+    const top=Math.max(0,document.getElementById('bar').getBoundingClientRect().bottom-room.top)+6;
+    const bottom=Math.min(wh,document.getElementById('footer').getBoundingClientRect().top-room.top)-6;
     const bodies=actors.map(a=>({x:layout.ox+(Math.round(a.x)-13)*scale-3,
       y:layout.oy+(Math.round(a.y)-(a.mode==='type'?40:34))*scale-3,
       w:26*scale+6,h:36*scale+6}));
