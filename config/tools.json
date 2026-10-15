@@ -9,19 +9,17 @@
       ]
     },
     {
-      "id": "codebuddy",
-      "name": "CodeBuddy",
+      "id": "openrouter",
+      "name": "Claude Code (OpenRouter)",
       "rules": [
-        { "type": "process", "names": ["node.exe", "node"], "contains_all": ["codebuddy-code", "bin", "codebuddy"] },
-        { "type": "process", "names": ["codebuddy.exe", "codebuddy"] }
+        { "type": "claude_session", "provider": "openrouter" }
       ]
     },
     {
       "id": "claude-code",
       "name": "Claude Code (DeepSeek)",
       "rules": [
-        { "type": "process", "names": ["claude.exe", "claude"] },
-        { "type": "process", "names": ["node.exe", "node"], "contains_all": ["@anthropic-ai", "claude-code"] }
+        { "type": "claude_session", "provider": "deepseek" }
       ]
     }
   ]

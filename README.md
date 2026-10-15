@@ -2,7 +2,7 @@
 
 姜小星的温馨阁楼工作室，一个独立运行的像素 AI 工具状态看板。主背景使用已选定的晴天绿植图 `preview/attic-bg-2.png`，原样复制到 `static/assets/attic-bg-2.png`。人物在图中已有的三个工位和休息区活动。
 
-Codex、CodeBuddy、Claude Code（DeepSeek）各有一个原创像素角色。干活时沿家具间的通道走回自己的座位，坐下敲键盘，显示器亮起；空闲时离开工位，在看书、喝茶、打盹之间随机切换。前端每 3 秒读取一次 `api/status`，断线时保留最后一次状态并自动重连。
+Codex、Claude Code (OpenRouter)、Claude Code（DeepSeek）各有一个原创像素角色。OpenRouter 沿用原蓝衣人物和右上工位，DeepSeek 仍使用黄衣人物和右下工位。干活时沿家具间的通道走回自己的座位，坐下敲键盘，显示器亮起；空闲时离开工位，在看书、喝茶、打盹之间随机切换。前端每 3 秒读取一次 `api/status`，断线时保留最后一次状态并自动重连。
 
 ## 自动天气与光线
 
@@ -52,12 +52,14 @@ Codex、CodeBuddy、Claude Code（DeepSeek）各有一个原创像素角色。�
 | 工具 | 当前识别规则 |
 | --- | --- |
 | Codex | `~/.codex/sessions/YYYY/MM/DD/*.jsonl` 近 3 天目录内、最近 30 秒修改的会话；或 `codex.exe` / `codex`，排除命令行中的 `app-server`、`exec-server`、`mcp-server`、`sandbox` |
-| CodeBuddy | `node.exe` / `node`，命令行同时包含 `codebuddy-code`、`bin`、`codebuddy`；或原生 `codebuddy.exe` / `codebuddy` |
-| Claude Code（DeepSeek） | 原生 `claude.exe` / `claude`；或 `node.exe` / `node`，命令行同时包含 `@anthropic-ai`、`claude-code` |
+| Claude Code (OpenRouter)，ID `openrouter` | Claude CLI 自身或最近的启动祖先进程命令行包含 `cc-openrouter.cmd`，对应本机 `D:\Tools\ClaudeCode\cc-openrouter.cmd` |
+| Claude Code（DeepSeek），ID `claude-code` | Claude CLI 自身或最近的启动祖先进程命令行包含 `cc-deepseek.cmd`，对应本机 `D:\Tools\ClaudeCode\cc-deepseek.cmd` |
 
 `process` 规则用 `names` 指定进程名；可用 `contains_all` 要求命令行包含所有片段，用 `exclude` 排除后台服务。`recent_files` 规则用 `root`、`pattern`、`active_seconds` 设置文件活动窗口，可用 `dated_directories` 和 `lookback_days` 扫日期目录。
 
-检测保留原有语义：**CLI 进程存在也计作干活，包含等待输入的时间；会话文件刚更新属于活动推断。** 这不是模型逐 token 生成的精确检测，也不判断 Claude 的实际模型提供商。进程命令行只在本机内存匹配，接口仅返回工具 ID、名字和状态。
+`claude_session` 规则用 `provider` 指定 `openrouter` 或 `deepseek`。先找原生 `claude.exe` / `claude` 或运行 `@anthropic-ai/claude-code/` 的 Node 进程，再沿 PID / 父 PID 最多检查 32 层，使用最近一层明确的启动脚本标记区分。脚本名按完整名称、不区分大小写匹配，`.cmd.bak` 等不算；遇到两种标记并存，或因祖先进程不可读、已退出等原因未找到标记时，不归属任何一方，防止两个角色一起误亮。祖先进程创建时间晚于子进程时也不关联，防止 PID 重用误判。只剩启动窗口而没有 Claude CLI 时计为空闲。
+
+检测保留原有语义：**可识别归属的 CLI 进程存在也计作干活，包含等待输入的时间；会话文件刚更新属于活动推断。** 这不是模型逐 token 生成的精确检测。Claude 归属依据启动入口，不查询实际模型或远端服务；如绕过上述脚本启动且没有脚本标记，会显示空闲。进程命令行只在本机内存匹配，不读取启动脚本内容、环境变量或 API Key，接口仅返回工具 ID、名字和状态。
 
 未来加工具先在配置里加一项即可扩展后端接口。需要特殊检测方式时，在 `detectors.py` 的 `RULE_DETECTORS` 注册 `callable(rule, processes, now) -> bool`。新增可见角色还需要开发者在 `static/office.js` 的 `DESKS`、`roomLayout()` 安排工位、素材和休息位置；本次不提供“自定义添加人物”的界面。
 
@@ -92,9 +94,9 @@ node tests/verify-weather.cjs
 & 'D:\AITools\py312\python.exe' 'D:\ai-office\tests\verify_screenshots.py'
 ```
 
-第一行使用隔离环境运行检测回归，验证进程白名单、后台排除、文件活动窗口、配置错误以及真实本机接口。临时文件只写本项目 `.browser-tmp/`，不启动或停止其他工具。
+第一行使用隔离环境运行检测回归，验证进程白名单、后台排除、文件活动窗口、配置错误以及真实本机接口；还覆盖 DeepSeek / OpenRouter 各自单开、同时运行、原生 / Node CLI、未标记会话、祖先进程、冲突标记与 PID 重用。临时文件只写本项目 `.browser-tmp/`，不启动或停止其他工具。
 
-第二行中的 `node` 是 JavaScript 运行程序；`tests/verify-office.cjs` 是浏览器验收脚本，应在项目目录执行。脚本启动隐藏的无头 Edge，临时拦截浏览器中的状态请求，验证背景复制一致、人物与屏幕以外超过 12 万个背景像素未被重绘、连续行走、家具碰撞、标签不遮人物且桌面文字不小于 16px、随机休息活动、打字帧、显示器、断线恢复、3 秒刷新、桌面/手机布局及 `/office/` 相对资源。模拟状态不写入后端，生产页面不含模拟开关。
+第二行中的 `node` 是 JavaScript 运行程序；`tests/verify-office.cjs` 是浏览器验收脚本，应在项目目录执行。脚本启动隐藏的无头 Edge，临时拦截浏览器中的状态请求，验证背景复制一致、人物与屏幕以外超过 12 万个背景像素未被重绘、连续行走、家具碰撞、标签不遮人物且桌面文字不小于 16px、随机休息活动、打字帧、显示器、断线恢复、3 秒刷新、桌面/手机布局及 `/office/` 相对资源。`tests/provider_scenarios.py` 将模拟进程送入真实检测函数，浏览器使用所得状态分别验证仅 DeepSeek、仅 OpenRouter、两者同时工作时的角色、亮屏、标签和底栏；单开场景图仅写入 `.browser-tmp/`。模拟状态不写入后端，生产页面不含模拟开关，也不调用模型 API。
 
 第三行运行标签拥挤场景检查，并覆盖两张晴天最终截图，将文字区域的坐标临时写入 `.browser-tmp/`。第四行验证北京时间的清晨、傍晚、跨日与跨年边界、小时内稳定及白天四种天气覆盖。第五行用隐藏无头浏览器验证五种天气、非中国浏览器时区、首次加载与刷新、60 秒渐变、雨雪动画遮罩、减少动画偏好、真实本机状态和小屏适配，并覆盖雨天截图 `attic-weather.png`；模拟时间只注入测试浏览器，不进入生产代码。
 

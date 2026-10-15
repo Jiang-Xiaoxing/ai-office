@@ -2,12 +2,15 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const {execFileSync}=require('node:child_process');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'D:/tools/PixelAgents/node_modules/playwright');
 const ROOT=path.resolve(__dirname,'..'),TMP=path.join(ROOT,'.browser-tmp');
 fs.mkdirSync(TMP,{recursive:true});
 const read=p=>p.evaluate(()=>window.officeDebug.snapshot());
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const ids=['codex','codebuddy','claude-code'];
+const ids=['codex','openrouter','claude-code'];
+const providerScenarios=JSON.parse(execFileSync(path.join(ROOT,'venv/Scripts/python.exe'),
+  [path.join(__dirname,'provider_scenarios.py')],{cwd:ROOT,windowsHide:true,encoding:'utf8'}));
 const settled=(s,work)=>s.actors.every(a=>a.requested===(work?'working':'idle')&&!a.route.length&&
   (work?a.mode==='type':['sleep','tea','read'].includes(a.mode)));
 async function arrive(page,work) {
@@ -125,6 +128,13 @@ async function watchTravel(page,work) {
     await checkBackground(page);
     assert.deepEqual(s.actors.map(a=>a.mode),['sleep','tea','read']);
     assert(s.actors.every(a=>!a.monitorOn));
+    assert.deepEqual(s.actors.map(a=>a.id),ids);
+    assert.deepEqual(s.stations.map(d=>d.id),ids);
+    assert.equal(await page.locator('.nameplate').nth(1).locator('strong').textContent(),'Claude Code');
+    assert.equal(await page.locator('.nameplate').nth(1).locator('small').textContent(),'OpenRouter');
+    assert.equal(await page.locator('.nameplate').nth(2).locator('small').textContent(),'DeepSeek');
+    assert.equal(await page.locator('#roster .agent-status').nth(1).locator('span').textContent(),'Claude Code (OpenRouter)');
+    assert.equal(await page.locator('body').textContent().then(s=>s.includes('CodeBuddy')),false);
     // All three residents must contribute nontransparent pixels, including the reading chair.
     await page.screenshot({path:path.join(ROOT,'preview/attic-idle.png')});
     console.log('PASS 1920x1080 idle: 4x pixels fill one screen, thin readable bars, three leisure animations');
@@ -144,6 +154,27 @@ async function watchTravel(page,work) {
     assert((await read(page)).actors.some(a=>a.mode==='walk'));
     await arrive(page,false);
     console.log('PASS leave work, randomly change leisure activity, walk to the next nook');
+    for(const [provider,activeId] of [['deepseek','claude-code'],['openrouter','openrouter']]) {
+      const payload=providerScenarios[provider];
+      assert.deepEqual(payload.agents.filter(a=>a.status==='working').map(a=>a.id),[activeId]);
+      mode=ids.map(id=>payload.agents.find(a=>a.id===id).status);
+      await page.waitForFunction(activeId=>officeDebug.snapshot().actors.every(a=>
+        a.requested===(a.id===activeId?'working':'idle')&&
+        (a.id===activeId?a.mode==='type':a.mode!=='walk'&&a.mode!=='type')),activeId,{timeout:22000});
+      const isolated=await read(page);
+      assert.deepEqual(isolated.actors.filter(a=>a.monitorOn).map(a=>a.id),[activeId]);
+      const plates=await page.locator('.nameplate').evaluateAll(els=>els.map(el=>el.classList.contains('working')));
+      assert.deepEqual(plates,ids.map(id=>id===activeId));
+      const states=await page.locator('#roster em').allTextContents();
+      assert.deepEqual(states,ids.map(id=>id===activeId?'干活中':'摸鱼中'));
+      await checkFit(page);
+      await page.screenshot({path:path.join(TMP,`provider-${provider}.png`)});
+      console.log(`PASS detector-to-page ${provider} only: one typing resident, one lit monitor, matching label and legend`);
+    }
+    mode=ids.map(id=>providerScenarios.both.agents.find(a=>a.id===id).status);
+    await page.waitForFunction(()=>{const a=officeDebug.snapshot().actors;return a[0].requested==='idle'&&a.slice(1).every(a=>a.mode==='type');},null,{timeout:22000});
+    assert.deepEqual((await read(page)).actors.filter(a=>a.monitorOn).map(a=>a.id),['openrouter','claude-code']);
+    console.log('PASS both providers run independently at the same time');
     mode=['working','idle','working'];
     await page.waitForFunction(()=>{const a=window.officeDebug.snapshot().actors;return a[0].mode==='type'&&a[1].requested==='idle'&&a[2].mode==='type';},null,{timeout:22000});
     failing=true;await page.waitForFunction(()=>!window.officeDebug.snapshot().connected);

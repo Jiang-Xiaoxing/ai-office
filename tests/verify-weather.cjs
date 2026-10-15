@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'D:/tools/PixelAgents/node_modules/playwright');
 const ROOT=path.resolve(__dirname,'..'),TMP=path.join(ROOT,'.browser-tmp');fs.mkdirSync(TMP,{recursive:true});
-const ids=['codex','codebuddy','claude-code'];
+const ids=['codex','openrouter','claude-code'];
 const times={sunny:'2026-10-15T01:00:00Z',cloudy:'2026-10-15T02:00:00Z',rain:'2026-10-15T03:00:00Z',snow:'2026-10-15T04:00:00Z',night:'2026-10-15T12:00:00Z'};
 const read=p=>p.evaluate(()=>officeDebug.snapshot());
 async function setTime(page,timestamp) {

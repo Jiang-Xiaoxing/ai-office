@@ -11,7 +11,7 @@
   const notice = document.getElementById('notice');
   const DESKS = [
     { id: 'codex', name: 'Codex', sprite: 'moss', color: '#a5cbb7' },
-    { id: 'codebuddy', name: 'CodeBuddy', sprite: 'sky', color: '#a6c4e1' },
+    { id: 'openrouter', name: 'Claude Code', subtitle: 'OpenRouter', rosterName: 'Claude Code (OpenRouter)', sprite: 'sky', color: '#a6c4e1' },
     { id: 'claude-code', name: 'Claude Code', subtitle: 'DeepSeek', sprite: 'sun', color: '#efd296' },
   ];
   const ACTIVITIES = { sleep: '打盹', read: '看书', tea: '喝茶', type: '敲键盘', walk: '走动' };
@@ -37,7 +37,7 @@
       ...ROOM,
       desks: [
         { id: 'codex', seat: { x: 96, y: 118 }, screen: { x: 84, y: 66, w: 23, h: 13 } },
-        { id: 'codebuddy', seat: { x: 384, y: 118 }, screen: { x: 372, y: 66, w: 23, h: 13 } },
+        { id: 'openrouter', seat: { x: 384, y: 118 }, screen: { x: 372, y: 66, w: 23, h: 13 } },
         { id: 'claude-code', seat: { x: 406, y: 237 }, screen: { x: 394, y: 184, w: 23, h: 13 } },
       ],
       blocks: [
@@ -240,7 +240,7 @@
     for(const a of actors) {
       const el=document.createElement('span');el.className='agent-status';el.style.setProperty('--agent-color',a.color);
       const dot=document.createElement('i'),name=document.createElement('span'),state=document.createElement('em');
-      name.textContent=a.name;state.textContent=a.requested===null?'连接中':a.requested==='working'?'干活中':'摸鱼中';
+      name.textContent=a.rosterName||a.name;state.textContent=a.requested===null?'连接中':a.requested==='working'?'干活中':'摸鱼中';
       el.append(dot,name,state);roster.append(el);
     }
     canvas.setAttribute('aria-label',`${weather?.snapshot().name||''}阁楼；`+actors.map(a=>`${a.name}${a.subtitle||''}：${a.requested==='working'?'干活中':'摸鱼中'}`).join('；'));
