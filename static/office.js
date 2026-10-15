@@ -180,8 +180,8 @@
       el.classList.toggle('working',a.requested==='working');
     }
     const ww=wrap.clientWidth,wh=wrap.clientHeight,scale=layout.pixelScale;
-    const top=document.getElementById('bar').offsetHeight+6;
-    const bottom=wh-document.getElementById('footer').offsetHeight-6;
+    // The room now occupies its own row between the header and footer.
+    const top=6,bottom=wh-6;
     const bodies=actors.map(a=>({x:layout.ox+(Math.round(a.x)-13)*scale-3,
       y:layout.oy+(Math.round(a.y)-(a.mode==='type'?40:34))*scale-3,
       w:26*scale+6,h:36*scale+6}));

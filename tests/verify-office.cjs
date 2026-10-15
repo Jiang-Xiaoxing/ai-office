@@ -92,7 +92,7 @@ async function watchTravel(page,work) {
   });
   try {
     await page.goto('http://127.0.0.1:8889/',{waitUntil:'networkidle'});await arrive(page,false);
-    await checkFit(page);let s=await read(page);assert.equal(s.zoom,4);
+    await checkFit(page);let s=await read(page);assert.equal(s.zoom,3);
     assert.equal(s.width,480);assert.equal(s.height,270);assert.equal(s.sample,1);
     assert.equal(s.background,'static/assets/attic-bg-2.png');
     assert(fs.readFileSync(path.join(ROOT,'static/assets/attic-bg-2.png')).equals(fs.readFileSync(path.join(ROOT,'preview/attic-bg-2.png'))),'background copied unchanged');
@@ -102,7 +102,7 @@ async function watchTravel(page,work) {
     assert(s.actors.every(a=>!a.monitorOn));
     // All three residents must contribute nontransparent pixels, including the reading chair.
     await page.screenshot({path:path.join(ROOT,'preview/attic-idle.png')});
-    console.log('PASS 1920x1080 idle: 4x pixels, three leisure animations, entire room fits');
+    console.log('PASS 1920x1080 idle: 3x pixels between header/footer, three leisure animations, entire room fits');
     mode='working';await page.waitForFunction(()=>window.officeDebug.snapshot().actors.every(a=>a.requested==='working'));
     assert((await read(page)).actors.some(a=>a.mode==='walk'));
     assert(await watchTravel(page,true)>0);await arrive(page,true);await checkFit(page);s=await read(page);
