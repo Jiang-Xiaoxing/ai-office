@@ -319,7 +319,7 @@
   // ===================== 状态轮询 =====================
 
   function poll() {
-    fetch('/api/status').then(function (r) { return r.json(); }).then(function (data) {
+    fetch('api/status', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (data) {
       lastAgents = data.agents || [];
       var d = new Date(data.ts * 1000);
       tsEl.textContent = d.toLocaleTimeString('zh-CN');

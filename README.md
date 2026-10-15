@@ -26,8 +26,12 @@ D:\ai-office\venv\Scripts\pythonw.exe D:\ai-office\server_app.py
 | 前端看板 | http://127.0.0.1:8889/ |
 | 状态接口 | http://127.0.0.1:8889/api/status |
 | 健康检查 | http://127.0.0.1:8889/api/healthz |
+| 小站登录入口 | https://laptop-ubv43gdg.tail2aec95.ts.net/office/ |
+| 小站代理状态接口 | https://laptop-ubv43gdg.tail2aec95.ts.net/office/api/status |
 
 后端绑 `127.0.0.1:8889`，外网不可达。从小站 `D:\studio` 的导航栏「AI 办公室」入口也能跳过来（不绕开小站登录保护）。
+
+小站将 `/office` 重定向到 `/office/`，再反代至本机 8889；页面的脚本、图片和接口地址须使用相对路径（例如 `static/office.js`、`api/status`），以同时支持直接访问与小站前缀。小站代理在现有登录校验之后执行，本机直接访问 `8888/office` 也需要有效的网关凭据。
 
 ## 状态检测原理
 
