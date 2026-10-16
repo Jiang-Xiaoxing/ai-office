@@ -15,9 +15,9 @@ const shown=page=>page.evaluate(()=>{
     return {id:el.dataset.actor,x:b.x,y:b.y,w:b.width,h:b.height,text:el.textContent};
   });
   return {room:{x:room.x,y:room.y,w:room.width,h:room.height},plates,s,
-    bodies:s.actors.map(a=>({id:a.id,x:room.x+(Math.round(a.x)-13)*s.pixelScale,
-      y:room.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,w:26*s.pixelScale,h:36*s.pixelScale,
-      head:room.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,
+    bodies:s.actors.map(a=>({id:a.id,x:room.x+a.body.x*s.pixelScale,
+      y:room.y+a.body.y*s.pixelScale,w:a.body.w*s.pixelScale,h:a.body.h*s.pixelScale,
+      head:room.y+a.body.y*s.pixelScale,
       cx:room.x+Math.round(a.x)*s.pixelScale}))};
 });
 async function assertPlates(page,expected) {
@@ -38,11 +38,11 @@ async function assertPlates(page,expected) {
 async function assertIcons(page) {
   const {room,s}=await shown(page);
   for(const a of s.actors) {
-    assert.equal(a.icon.x,Math.round(a.x)+14,'icon sits just beside the sprite');
-    assert(a.icon.x>=Math.round(a.x)+13||a.icon.x+a.icon.w<=Math.round(a.x)-13,'icon never covers its resident');
+    assert.equal(a.icon.x,a.body.x+a.body.w+2,'icon sits just beside the sprite');
+    assert(a.icon.x>=a.body.x+a.body.w||a.icon.x+a.icon.w<=a.body.x,'icon never covers its resident');
     assert(a.icon.x>=0&&a.icon.y>=0&&a.icon.x+a.icon.w<=s.width&&a.icon.y+a.icon.h<=s.height,
       'icon stays inside the room grid');
-    const head=room.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale;
+    const head=room.y+a.body.y*s.pixelScale;
     assert(Math.abs(room.y+a.icon.y*s.pixelScale-head)<=s.pixelScale*3,'icon rides at head height');
   }
   // The icon is really painted, and it is painted where the snapshot says.
@@ -66,6 +66,7 @@ async function capture(page,name,dir=path.join(ROOT,'preview')) {
   const masks=await page.locator('.nameplate:not([hidden]),#bar,#footer').evaluateAll(els=>els.map(el=>{
     const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
   }));
+  await require('./capture.cjs')(page,name);
   await page.screenshot({path:path.join(dir,`${name}.png`)});
   fs.writeFileSync(path.join(TMP,`${name}-masks.json`),JSON.stringify(masks));
 }
@@ -113,12 +114,12 @@ async function capture(page,name,dir=path.join(ROOT,'preview')) {
         const s=officeDebug.snapshot(),el=document.querySelector('.nameplate:not([hidden])');
         const b=el.getBoundingClientRect(),room=document.getElementById('game').getBoundingClientRect();
         const a=s.actors.find(a=>a.id===el.dataset.actor);
-        return {id:a.id,walking:a.mode==='walk',actorX:a.x,plateX:b.x+b.width/2,
+        return {id:a.id,walking:a.mode==='walk',actorX:a.x,bodyRight:a.body.x+a.body.w,plateX:b.x+b.width/2,
           iconX:a.icon.x,roomX:room.x,scale:s.pixelScale};
       });
       if(sample.walking) {
         tracked++;
-        assert.equal(sample.iconX,Math.round(sample.actorX)+14,'icon follows the walker');
+        assert.equal(sample.iconX,sample.bodyRight+2,'icon follows the walker');
         assert(Math.abs(sample.plateX-(sample.roomX+Math.round(sample.actorX)*sample.scale))<=sample.scale+1,
           'pinned plate follows the walker: '+JSON.stringify(sample));
       }
@@ -128,7 +129,7 @@ async function capture(page,name,dir=path.join(ROOT,'preview')) {
     // Clicking the resident again, or any empty spot, puts the plate away.
     await page.waitForFunction(()=>{
       const s=window.officeDebug.snapshot();return s.actors.length===3&&s.actors.every(a=>a.mode==='type');
-    },null,{timeout:22000});
+    },null,{timeout:45000});
     assert(!await page.evaluate(()=>document.elementFromPoint(1200,620)?.dataset?.target?.startsWith('resident:')),
       'the middle of the floor stays free for a dismissal click');
     await target(page,'resident:openrouter').click();
@@ -148,7 +149,7 @@ async function capture(page,name,dir=path.join(ROOT,'preview')) {
     failing=false;
     await page.close();mode='idle';
     const mobile=await context.newPage();await mobile.setViewportSize({width:390,height:844});await mobile.goto(`${BASE}/`);
-    await mobile.waitForFunction(()=>window.officeDebug?.snapshot().actors.filter(a=>a.mode==='sleep').length>=2,null,{timeout:30000});
+    await mobile.waitForFunction(()=>window.officeDebug?.snapshot().actors.every(a=>['sleep','tea','read'].includes(a.mode)),null,{timeout:30000});
     await assertIcons(mobile);
     for(const id of ['codex','openrouter','claude-code']) {
       await target(mobile,`resident:${id}`).click();

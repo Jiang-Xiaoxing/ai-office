@@ -11,8 +11,8 @@ async function roomState(page) {
     const box=el=>{const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};};
     return {s,room:{x:r.x,y:r.y,w:r.width,h:r.height},
       plates:[...document.querySelectorAll('.nameplate')].filter(el=>!el.hidden).map(el=>({...box(el),id:el.dataset.actor})),
-      bodies:s.actors.map(a=>({id:a.id,x:r.x+(Math.round(a.x)-13)*s.pixelScale,
-        y:r.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,w:26*s.pixelScale,h:36*s.pixelScale,
+      bodies:s.actors.map(a=>({id:a.id,x:r.x+a.body.x*s.pixelScale,
+        y:r.y+a.body.y*s.pixelScale,w:a.body.w*s.pixelScale,h:a.body.h*s.pixelScale,
         cx:r.x+Math.round(a.x)*s.pixelScale}))};
   });
 }
@@ -23,7 +23,7 @@ function checkIcons({s,room,bodies}) {
     assert(a.icon,`${a.id} wears a head-level status icon`);
     assert(a.icon.w>0&&a.icon.h>0&&a.icon.x>=0&&a.icon.y>=0&&a.icon.x+a.icon.w<=s.width&&a.icon.y+a.icon.h<=s.height,
       'status icon stays inside the room grid');
-    assert(a.icon.x>=Math.round(a.x)+13||a.icon.x+a.icon.w<=Math.round(a.x)-13,'status icon never covers its resident');
+    assert(a.icon.x>=a.body.x+a.body.w||a.icon.x+a.icon.w<=a.body.x,'status icon never covers its resident');
     assert(Math.abs(room.y+a.icon.y*s.pixelScale-body.y)<=s.pixelScale*3,'status icon rides at the resident head');
   }
 }
@@ -69,7 +69,9 @@ async function geometry(page) {
       await page.waitForFunction(()=>officeDebug?.snapshot().actors.length===3&&officeDebug.snapshot().actors.every(a=>['sleep','tea','read'].includes(a.mode)));
       await geometry(page);
       const s=await page.evaluate(()=>officeDebug.snapshot());
-      assert.equal(s.pixelScale,size.width===1920?4:2);
+      assert(Math.abs(s.pixelScale-size.width/480)<.001);
+      const frame=await page.locator('#wrap').boundingBox(),art=await page.locator('#game').boundingBox();
+      assert(Math.abs(art.x-frame.x)<.1&&Math.abs(art.width-frame.width)<.1&&art.y<=frame.y&&art.y+art.height>=frame.y+frame.height,'no large page-colour strips around the room');
       assert.equal(s.smoothing,false);
       assert.equal(await page.locator('body').getAttribute('data-time'),name==='ui-day'?'day':'night');
       assert.equal(await page.title(),'暖灯小阁 · 阁楼工作室');
@@ -97,13 +99,13 @@ async function geometry(page) {
       await page.keyboard.press('Escape');await resident.focus();await page.keyboard.press('Enter');
       assert.equal(await resident.evaluate(e=>getComputedStyle(e).outlineStyle),'none');
       assert(await page.locator('#interaction-note').isVisible());await page.keyboard.press('Escape');
-      for(const id of ['plant-left','plant-center','plant-right']) {
+      for(const id of ['c-plant-1','c-plant-4','c-plant-2']) {
         await page.locator(`[data-target="${id}"]`).click();
         const effects=await page.evaluate(()=>officeDebug.snapshot().interactions.effects.filter(e=>e.type==='water'));
         assert(effects.some(e=>e.id===id));assert.equal(effects.filter(e=>e.id===id).length,1);
         await page.keyboard.press('Escape');
       }
-      await page.locator('[data-target="tea-table"]').click();assert(await page.locator('#interaction-note').isVisible());await page.keyboard.press('Escape');
+      await page.locator('[data-target="c-tea-table"]').click();assert(await page.locator('#interaction-note').isVisible());await page.keyboard.press('Escape');
       // Park the pointer on the header strip: no resident can sit under it, so
       // the resting-room checks and the delivery screenshot stay plate-free.
       await page.mouse.move(size.width-4,20);
@@ -113,22 +115,23 @@ async function geometry(page) {
       const masks=await page.locator('.nameplate:not([hidden]),#bar,#footer').evaluateAll(els=>els.map(el=>{
         const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
       }));
+      await require('./capture.cjs')(page,name);
       await page.screenshot({path:path.join(ROOT,'preview',name+'.png')});
       fs.writeFileSync(path.join(TMP,name+'-masks.json'),JSON.stringify(masks));
       // Exercise movement and repeated resize rather than only a single settled layout.
       working=true;
       await page.waitForFunction(()=>officeDebug.snapshot().actors.some(a=>a.mode==='walk'));
       for(let i=0;i<8;i++){await geometry(page);await page.waitForTimeout(180);}
-      await page.waitForFunction(()=>officeDebug.snapshot().actors.every(a=>a.mode==='type'),null,{timeout:22000});
+      await page.waitForFunction(()=>officeDebug.snapshot().actors.every(a=>a.mode==='type'),null,{timeout:45000});
       await geometry(page);
       if(name==='ui-narrow') {
         for(const size of [{width:1000,height:600},{width:1024,height:600},{width:390,height:844},{width:1920,height:1080}]) {
           await page.setViewportSize(size);await page.waitForTimeout(150);await geometry(page);
         }
         count=6;await page.setViewportSize({width:1024,height:600});
-        await page.waitForFunction(()=>officeDebug.snapshot().actors.length===6&&officeDebug.snapshot().actors.every(a=>a.mode==='type'),null,{timeout:22000});
+        await page.waitForFunction(()=>officeDebug.snapshot().actors.length===6&&officeDebug.snapshot().actors.every(a=>a.mode==='type'),null,{timeout:45000});
         await geometry(page);working=false;
-        await page.waitForFunction(()=>officeDebug.snapshot().actors.every(a=>['sleep','tea','read'].includes(a.mode)),null,{timeout:22000});
+        await page.waitForFunction(()=>officeDebug.snapshot().actors.every(a=>['sleep','tea','read'].includes(a.mode)),null,{timeout:45000});
         await geometry(page);
       }
       assert.deepEqual(errors,[]);

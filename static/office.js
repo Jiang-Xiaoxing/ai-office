@@ -1,5 +1,5 @@
 /* Approved sunny attic. Coordinates use the background's native 480x270 pixel grid.
- * Register future detectors in config/tools.json. Resident art lives in assets/residents.json.
+ * Register future detectors in config/tools.json. Resident art lives in assets/sprites/manifest.json.
  * Every resource and API URL is relative so an /office/ reverse proxy also works.
  * Residents carry a tiny pixel status icon beside the head; the full parchment
  * nameplate only pops up while a resident is hovered, pinned or focused.
@@ -13,7 +13,7 @@
   const notice = document.getElementById('notice');
   // Geometry is capacity, not a tool list. Existing tools retain their original seats/looks.
   const HOMES = { codex: 0, openrouter: 1, 'claude-code': 2 };
-  const CAPACITY = 6, IDLE_SLOTS = [0, 2, 4, 1, 3, 5];
+  const CAPACITY = 6, IDLE_SLOTS = [0, 1, 2, 3, 4, 5];
   const COLORS = ['#a5cbb7', '#a6c4e1', '#efd296', '#b39ac4', '#c5838b', '#9cb47a'];
   const ACTIVITIES = { sleep: '打盹', read: '看书', tea: '喝茶', type: '敲键盘', walk: '走动' };
   // Optional runtime hint (e.g. "Flash") from the backend is appended to the display name.
@@ -42,6 +42,7 @@
   // the room, and only then occupies a workstation, while it is really busy.
   const FALLBACK_TOOL = /认不出|未识别|无法识别|未知|unknown|other/i;
   const actors = [];
+  let activeWalker=null;
   let tools = [], residents = [], overflowNotice = '';
   let hovered = null, pinned = null, hoverSuppressed = null, keyboardNav = false;
   // The resident id behind any interaction target, so hover, pins and keyboard
@@ -51,23 +52,33 @@
     return id?.startsWith('resident:') ? id.slice(9) : null;
   };
   const ROOM = { w: 480, h: 270 };
-  let atlas, background, metadata, scene, weather, interaction, layout, initialized = false, lastTime = 0, clock = 0;
+  let background, nightBackground, metadata, roomSpec, weather, interaction, layout, initialized=false,lastTime=0,clock=0;
+  const sheets=new Map(),lifecycle=new AbortController();
+  let animation=0,pollTimer=0,resizeObserver,requestController,disposed=false,weatherBuilds=0;
+  const listen=(target,type,handler)=>target.addEventListener(type,handler,{signal:lifecycle.signal});
   let latest = null, polls = 0, connected = false, polling = false;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const rect = (x, y, w, h, color, c = ctx) => {
     c.fillStyle = color; c.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
   };
-  function sprite(name, x, y, c = ctx) {
-    const s = metadata[name];
-    if (s) c.drawImage(atlas, ...s, Math.round(x), Math.round(y), s[2], s[3]);
+  const animationName=a=>a.mode==='walk'?['walk_down','walk_left','walk_right','walk_up'][a.dir]:
+    ({type:'typing_back',tea:'tea',read:'reading',sleep:'napping'}[a.mode]||'walk_down');
+  function frameIndex(a) {
+    const frames=metadata.animations[animationName(a)].frames;
+    return frames[(reduced.matches&&a.mode!=='walk'?0:a.frame)%frames.length];
   }
-  function headTop(a) {return Math.round(a.y)-(a.mode==='type'?40:34);}
+  function bodyBox(a,x=a.x,y=a.y) {
+    const look=residents[a.slot];
+    const {left,top,right,bottom}=a.mode==='walk'?look.walkBounds:look.actionBounds[animationName(a)];
+    return {x:Math.round(x)-32+left,y:Math.round(y)-59+top,
+      w:right-left,h:bottom-top};
+  }
+  function headTop(a) {return bodyBox(a).y;}
   function iconName(a) {return a.requested===null?'dots':STATE_ICONS[a.mode]||'dots';}
   function iconBox(a) {
-    // Beside the 26px-wide sprite, mirrored to the left near the right wall so
-    // the icon always stays inside the room.
-    const name=iconName(a),rows=ICONS[name].rows,w=Math.max(...rows.map(row=>row.length)),x=Math.round(a.x);
-    return {name,x:x+14+w<=ROOM.w-3?x+14:x-14-w,y:headTop(a)+2,w,h:rows.length};
+    const name=iconName(a),rows=ICONS[name].rows,w=Math.max(...rows.map(row=>row.length)),body=bodyBox(a);
+    const x=body.x+body.w+2+w<=ROOM.w-3?body.x+body.w+2:body.x-2-w;
+    return {name,x,y:headTop(a)+2,w,h:rows.length};
   }
   function drawIcon(name,x,y,c=ctx) {
     const art=ICONS[name];if(!art)return;
@@ -76,79 +87,23 @@
     }});
   }
   function roomLayout() {
-    // Chairs, monitor interiors and obstacles are measured on attic-bg-2.png / 4.
-    // The first three stations are baked in; only occupied extra stations are drawn.
-    const slots = [
-      { seat: { x: 96, y: 118 }, screen: { x: 84, y: 66, w: 23, h: 13 } },
-      { seat: { x: 384, y: 118 }, screen: { x: 372, y: 66, w: 23, h: 13 } },
-      { seat: { x: 406, y: 237 }, screen: { x: 394, y: 184, w: 23, h: 13 } },
-      // Back wall, then the two front-edge bays flanking (not blocking) stairs.
-      ...[{ x: 222, y: 63 }, { x: 147, y: 185 }, { x: 301, y: 185 }].map(p => ({
-        seat: { x: p.x + 31, y: p.y + 55 },
-        screen: { x: p.x + 22, y: p.y + 3, w: 18, h: 13 },
-        furniture: { ...p, w: 64, h: 63 }, sprite: 'desk-wall',
-        block: { x: p.x, y: p.y + 14, w: 63, h: 27 } })),
-    ];
-    const desks = actors.map(a => ({ ...slots[a.slot], id: a.id, slot: a.slot }));
-    const occupied = slot => desks.some(d => d.slot === slot);
-    return {
-      ...ROOM,
-      desks,
-      // Visual extents differ from floor collision footprints. Labels must also
-      // preserve the room's original furnishings, not just the generated desks.
-      protected: [
-        { x: 58, y: 63, w: 78, h: 60 }, { x: 345, y: 63, w: 77, h: 60 },
-        { x: 368, y: 180, w: 77, h: 61 }, // original desks and chairs
-        { x: 13, y: 151, w: 20, h: 54 }, // floor lamp
-        { x: 30, y: 173, w: 80, h: 70 }, { x: 114, y: 183, w: 31, h: 45 },
-        { x: 215, y: 207, w: 53, h: 47 }, // stairs stay clear all the way to the opening
-        ...(!occupied(4) ? [{ x: 194, y: 210, w: 21, h: 37 }] : []),
-        ...(!occupied(5) ? [{ x: 272, y: 207, w: 27, h: 40 }] : []),
-        { x: 430, y: 74, w: 37, h: 65 }, { x: 177, y: 52, w: 42, h: 42 },
-        { x: 90, y: 17, w: 66, h: 37 }, { x: 326, y: 19, w: 62, h: 35 },
-        { x: 228, y: 20, w: 24, h: 23 }, // pendant and windows
-        { x: 27, y: 76, w: 29, h: 36 }, { x: 445, y: 181, w: 24, h: 49 },
-        { x: 289, y: 59, w: 20, h: 20 }, // rear hanging picture
-        ...(!occupied(3) ? [{ x: 221, y: 40, w: 56, h: 56 }] : []),
-        ...desks.filter(d => d.furniture).map(d => d.furniture),
-      ],
-      blocks: [
-        { x: 58, y: 77, w: 77, h: 27 },
-        { x: 345, y: 77, w: 77, h: 27 },
-        { x: 368, y: 193, w: 76, h: 28 },
-        { x: 430, y: 83, w: 36, h: 54 },
-        { x: 30, y: 174, w: 80, h: 17 },
-        { x: 55, y: 211, w: 32, h: 20 },
-        { x: 13, y: 158, w: 16, h: 47 },
-        ...(!occupied(4) ? [{ x: 197, y: 230, w: 17, h: 15 }] : []),
-        { x: 217, y: 219, w: 49, h: 35 },
-        ...(!occupied(5) ? [{ x: 274, y: 230, w: 20, h: 15 }] : []),
-        { x: 446, y: 207, w: 20, h: 22 },
-        ...desks.filter(d => d.block).map(d => d.block),
-      ],
-      spots: [
-        { x: 62, y: 208, action: 'sleep' }, { x: 94, y: 202, action: 'sleep' },
-        { x: 92, y: 242, action: 'tea' }, { x: 174, y: 168, action: 'tea' },
-        { x: 132, y: 215, action: 'read' }, { x: 310, y: 168, action: 'read' },
-        { x: 218, y: 168, action: 'read' }, { x: 350, y: 168, action: 'tea' },
-        { x: 70, y: 151, action: 'tea' },
-      ],
-    };
+    const point=p=>({x:p.x/4,y:p.y/4});
+    const box=r=>({x:r.x/4,y:r.y/4,w:r.width/4,h:r.height/4});
+    const slots=roomSpec.workstations.map((d,slot)=>({slot,stationId:d.id,
+      seat:point(d.sprite.groundAnchor),approach:point(d.approachPoint),topLeft:point(d.sprite.topLeft),
+      screen:{x:d.deskRect.x/4+12,y:d.deskRect.y/4-9,w:20,h:9},clickRect:box(d.clickRect)}));
+    return {...ROOM,desks:actors.map(a=>({...slots[a.slot],id:a.id})),
+      protected:roomSpec.navigation.obstacleRects.map(o=>box(o.rect)),
+      blocks:roomSpec.navigation.obstacleRects.map(o=>({...box(o.rect),station:o.disabledWhenOccupying})),
+      walkable:roomSpec.navigation.walkableRects.map(box),
+      spots:[{x:56,y:182,action:'sleep'},{x:188,y:184,action:'tea'},
+        {x:244,y:184,action:'read'},{x:356,y:184,action:'sleep'},
+        {x:300,y:184,action:'read'},{x:412,y:184,action:'tea'}]};
   }
-  function buildScene() {
-    scene = document.createElement('canvas');scene.width=ROOM.w;scene.height=ROOM.h;
-    const c=scene.getContext('2d');c.imageSmoothingEnabled=false;
-    // The supplied PNG is an exact 4x nearest-neighbor enlargement of this grid.
-    c.drawImage(background,0,0,ROOM.w,ROOM.h);
-    if(layout.desks.some(d=>d.slot===3))sprite('clear-rear-plants',220,43,c);
-    if(layout.desks.some(d=>d.slot===4))sprite('clear-stair-plant',194,210,c);
-    if(layout.desks.some(d=>d.slot===5))sprite('clear-right-plant',270,207,c);
-    for(const d of layout.desks)if(d.furniture) {
-      sprite('chair',d.seat.x-13,d.seat.y-19,c);
-      sprite(d.sprite,d.furniture.x,d.furniture.y,c);
-    }
-    weather=AtticWeather.create(scene);
-  }
+  // The left chair and bookcase form a narrow bay. Its resident rests on its
+  // own side of that passage; others must not enter and get trapped behind a
+  // working neighbour. Actions still change in place when all nooks are taken.
+  const leisureSpots=a=>layout.spots.map((p,i)=>({p,i})).filter(({i})=>a.slot===0?i===0:i!==0);
   function isFallbackTool(t) {return FALLBACK_TOOL.test(`${t.id} ${t.name||''}`);}
   function roomTools() {
     // Idle catch-alls stay in the footer only, so they never hold a person slot.
@@ -172,14 +127,18 @@
         const parts=(t.name||t.id).match(/^(.*?)\s*[（(]([^()（）]+)[）)]$/);
         const subtitle=[parts?.[2],t.detail].filter(Boolean).join(' · ')||undefined;
         const identity={id:t.id,name:parts?parts[1]:(t.name||t.id),subtitle,
-          rosterName:displayName(t),index,slot,sprite:look.id,color:COLORS[slot]};
+          rosterName:displayName(t),characterName:look.name,index,slot,sprite:look.id,color:COLORS[slot]};
         if(old?.slot===slot)return Object.assign(old,identity);
         return {...identity,x:0,y:0,mode:'idle',dir:0,requested:null,route:[],distance:0,frame:0,
           phase:slot*1.3,idleSlot:IDLE_SLOTS[slot],idleTime:14+slot*2,idleChanges:0};
       }));
-      actors.signature=signature;layout={...layout,...roomLayout()};buildScene();
+      actors.signature=signature;layout={...layout,...roomLayout()};
       for(const a of actors)if(a.requested===null) {
-        const p=nearestFree(destination(a));a.x=p.x;a.y=p.y;
+        const available=leisureSpots(a).filter(({p})=>!personCollision(p.x,p.y,a));
+        const spawn=available.find(({i})=>i===a.idleSlot)||available[0]||
+          {p:nearestFree(layout.desks[a.index].seat,a,true),i:a.idleSlot};
+        if(!spawn.p)throw new Error('No free resident position');
+        a.idleSlot=spawn.i;a.x=spawn.p.x;a.y=spawn.p.y;
       }
       createLabels();
     }
@@ -187,24 +146,46 @@
     if(excess&&excess!==overflowNotice)console.warn(`暖灯小阁最多显示 ${CAPACITY} 人；其余工具仅在底栏显示：${excess}`);
     overflowNotice=excess;
   }
-  function walkable(x,y) {
-    // Routes may run along a solid edge; discard floating-point movement noise.
+  function walkable(x,y,actor) {
     x=Math.round(x*1e6)/1e6;y=Math.round(y*1e6)/1e6;
-    if(x<22||x>layout.w-22||y<110||y>layout.h-22)return false;
-    return !layout.blocks.some(b=>x>b.x-5&&x<b.x+b.w+5&&y>b.y-3&&y<b.y+b.h+4);
+    if(!layout.walkable.some(r=>x>=r.x+7&&x<=r.x+r.w-7&&y>=r.y+3&&y<=r.y+r.h-3))return false;
+    return !layout.blocks.some(b=>!(actor&&b.station===layout.desks[actor.index]?.stationId)&&
+      x>b.x-7&&x<b.x+b.w+7&&y>b.y-3&&y<b.y+b.h+3);
   }
-  function nearestFree(point) {
+  function personCollision(x,y,a) {
+    const look=residents[a.slot],b=look.walkBounds;
+    const ax=Math.round(x)-32,ay=Math.round(y)-59;
+    const p={x:ax+b.left,y:ay+b.top,w:b.right-b.left,h:b.bottom-b.top};
+    return actors.some(other=>{
+      if(other===a)return false;
+      const q=bodyBox(other);if(!overlaps(p,q,1))return false;
+      const bx=Math.round(other.x)-32,by=Math.round(other.y)-59,otherLook=residents[other.slot];
+      const mask=other.mode==='walk'?otherLook.walkMask:otherLook.actionMasks[animationName(other)];
+      // Transparent corners of the supplied 64px frames are free space. A
+      // union across animation frames keeps clearance stable as limbs move.
+      for(let py=Math.max(p.y,q.y-1);py<Math.min(p.y+p.h,q.y+q.h+1);py++)
+        for(let px=Math.max(p.x,q.x-1);px<Math.min(p.x+p.w,q.x+q.w+1);px++) {
+          if(!look.walkMask[(py-ay)*64+px-ax])continue;
+          for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++) {
+            const mx=px+dx-bx,my=py+dy-by;
+            if(mx>=0&&mx<64&&my>=0&&my<64&&mask[my*64+mx])return true;
+          }
+        }
+      return false;
+    });
+  }
+  function nearestFree(point,actor,avoidPeople=false) {
     const gx=Math.round(point.x/4),gy=Math.round(point.y/4);
     for(let r=0;r<22;r++)for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++) {
       if(Math.abs(dx)!==r&&Math.abs(dy)!==r)continue;
       const x=(gx+dx)*4,y=(gy+dy)*4;
-      if(walkable(x,y))return {x,y};
+      if(walkable(x,y,actor)&&(!avoidPeople||!personCollision(x,y,actor)))return {x,y};
     }
     return null;
   }
-  function routeBetween(start,target) {
-    const s=nearestFree(start),end=nearestFree(target);
-    if(!s||!end||!walkable(target.x,target.y))return [];
+  function routeBetween(start,target,actor) {
+    const s=nearestFree(start,actor,true),end=nearestFree(target,actor);
+    if(!s||!end||!walkable(target.x,target.y,actor))return [];
     const key=p=>`${p.x},${p.y}`,queue=[s],seen=new Map([[key(s),null]]);
     let found=false;
     for(let i=0;i<queue.length;i++) {
@@ -213,7 +194,7 @@
         Math.abs(p.x+a[0]-end.x)+Math.abs(p.y+a[1]-end.y)-Math.abs(p.x+b[0]-end.x)-Math.abs(p.y+b[1]-end.y));
       for(const [dx,dy] of options) {
         const n={x:p.x+dx,y:p.y+dy},k=key(n);
-        if(!seen.has(k)&&walkable(n.x,n.y)){seen.set(k,p);queue.push(n);}
+        if(!seen.has(k)&&walkable(n.x,n.y,actor)&&!personCollision(n.x,n.y,actor)){seen.set(k,p);queue.push(n);}
       }
     }
     if(!found)return [];
@@ -227,77 +208,89 @@
     return a.requested==='working'?layout.desks[a.index].seat:layout.spots[a.idleSlot];
   }
   function go(a,target,arrival) {
-    a.pending=null;a.route=routeBetween(a,target);a.arrival=arrival;
+    a.pending=null;a.route=routeBetween(a,target,a);a.arrival=arrival;a.waitTime=0;
+    // A rest point must not fence another resident into a bay. If its route
+    // is occupied, reserve a reachable free nook rather than waiting forever.
+    if(!a.route.length&&a.requested==='idle'&&Math.hypot(a.x-target.x,a.y-target.y)>.1) {
+      const reserved=new Set(actors.filter(b=>b!==a&&b.requested==='idle').map(b=>b.idleSlot));
+      const choices=leisureSpots(a).filter(({i})=>!reserved.has(i))
+        .sort((b,c)=>Math.hypot(a.x-b.p.x,a.y-b.p.y)-Math.hypot(a.x-c.p.x,a.y-c.p.y));
+      for(const {p,i} of choices) {
+        const route=routeBetween(a,p,a);
+        if(route.length){a.idleSlot=i;a.route=route;a.arrival=p.action;target=p;break;}
+      }
+    }
     if(a.route.length)a.mode='walk';
     else if(Math.hypot(a.x-target.x,a.y-target.y)<.1)a.mode=arrival;
     else{a.mode='idle';a.pending={...target};a.retryTime=1;}
   }
   function chooseLeisure(a) {
     const taken=new Set(actors.filter(other=>other!==a&&other.requested==='idle').map(other=>other.idleSlot));
-    const choices=layout.spots.map((p,i)=>({p,i})).filter(({p,i})=>!taken.has(i)&&p.action!==layout.spots[a.idleSlot].action&&walkable(p.x,p.y)&&
+    const choices=leisureSpots(a).filter(({p,i})=>!taken.has(i)&&p.action!==layout.spots[a.idleSlot].action&&walkable(p.x,p.y)&&
       !actors.some(other=>other!==a&&other.requested==='idle'&&
         Math.abs(p.x-layout.spots[other.idleSlot].x)<28&&Math.abs(p.y-layout.spots[other.idleSlot].y)<38));
-    if(!choices.length){a.idleTime=4;return;}
+    if(!choices.length){a.mode=['sleep','tea','read'].find(mode=>mode!==a.mode);a.idleChanges++;a.idleTime=12+Math.random()*10;return;}
     a.idleSlot=choices[Math.floor(Math.random()*choices.length)].i;a.idleChanges++;
     go(a,destination(a),destination(a).action);
   }
   function fit() {
     if(!metadata)return;
     const ww=wrap.clientWidth,wh=wrap.clientHeight;
-    // Keep the entire approved room, its aspect ratio and a whole-number pixel zoom.
-    // Below 480px, decimate by a whole source-pixel step before integer enlargement.
-    const sample=Math.max(1,Math.ceil(Math.max(ROOM.w/ww,ROOM.h/wh)));
-    const w=Math.ceil(ROOM.w/sample),h=Math.ceil(ROOM.h/sample);
-    const zoom=Math.max(1,Math.floor(Math.min(ww/w,wh/h))),pixelScale=zoom/sample;
+    // Fill the width between the separately laid-out bars. Crop only the
+    // decorative roof/floor edges (at most 20 native pixels per edge), never
+    // stretch the room or crop its side workstations on very short windows.
+    const sample=1,w=ROOM.w,h=ROOM.h;
+    const zoom=Math.min(ww/w,wh/(h-40)),pixelScale=zoom;
     if(initialized&&canvas.width===w&&canvas.height===h&&layout.zoom===zoom&&
       layout.viewportWidth===ww&&layout.viewportHeight===wh)return;
     canvas.width=w;canvas.height=h;canvas.style.width=`${w*zoom}px`;canvas.style.height=`${h*zoom}px`;
-    const ox=Math.floor((ww-w*zoom)/2/zoom)*zoom,oy=Math.floor((wh-h*zoom)/2/zoom)*zoom;
+    const ox=(ww-w*zoom)/2,oy=(wh-h*zoom)/2;
     canvas.style.left=`${ox}px`;canvas.style.top=`${oy}px`;
     ctx.imageSmoothingEnabled=false;ctx.setTransform(1/sample,0,0,1/sample,0,0);
-    if(!initialized){layout=roomLayout();buildScene();}
+    if(!initialized)layout=roomLayout();
     Object.assign(layout,{zoom,sample,pixelScale,ox,oy,viewportWidth:ww,viewportHeight:wh});
     document.body.dataset.density=pixelScale>=3?'normal':pixelScale>=1.5?'compact':'tiny';
     // Resizing only changes projection; do not teleport residents or interrupt a walk.
     if(!initialized)actors.forEach(a=>{
-      const target=destination(a),p=nearestFree(target);
+      const target=destination(a),p=target;
       a.x=p.x;a.y=p.y;a.route=[];
     });
     initialized=true;
   }
   function updateActors(dt) {
+    // A single moving reservation prevents head-on deadlocks in the narrow
+    // bays. Other residents keep their seats until the passage is clear.
+    const priority=a=>a.requested==='idle'?[2,3,1,4,0,5].indexOf(a.slot):10+a.x;
+    const mover=actors.filter(a=>a.route.length).sort((a,b)=>priority(a)-priority(b))[0];
     for(const a of actors) {
       if(a.pending){a.retryTime-=dt;if(a.retryTime<=0)go(a,a.pending,a.arrival);}
       else if(a.route.length) {
+        if(a!==mover)continue;
+        if(activeWalker!==a.id){activeWalker=a.id;go(a,destination(a),a.arrival);if(!a.route.length)continue;}
         let budget=dt*48;
         while(budget>0&&a.route.length) {
           const p=a.route[0],dx=p.x-a.x,dy=p.y-a.y,dist=Math.hypot(dx,dy);
           if(dist<.01){a.x=p.x;a.y=p.y;a.route.shift();continue;}
           a.dir=Math.abs(dx)>Math.abs(dy)?(dx<0?1:2):(dy<0?3:0);
-          const move=Math.min(budget,dist);a.x+=dx/dist*move;a.y+=dy/dist*move;
+          const move=Math.min(budget,dist);const nx=a.x+dx/dist*move,ny=a.y+dy/dist*move;
+          if(personCollision(nx,ny,a)) {
+            a.waitTime=(a.waitTime||0)+dt;
+            if(a.waitTime>.6){go(a,destination(a),a.arrival);}
+            break;
+          }
+          a.waitTime=0;a.x=nx;a.y=ny;
           a.distance+=move;budget-=move;if(move===dist){a.x=p.x;a.y=p.y;a.route.shift();}
         }
-        if(!a.route.length){a.mode=a.arrival;a.dir=a.mode==='type'?3:0;a.idleTime=12+Math.random()*10;}
+        if(!a.route.length){activeWalker=null;a.mode=a.arrival;a.dir=a.mode==='type'?3:0;a.idleTime=12+Math.random()*10;}
       } else if(a.requested==='idle') {
         a.idleTime-=dt;if(a.idleTime<=0)chooseLeisure(a);
       }
-      a.frame=a.mode==='walk'?Math.floor(a.distance/4)%4:Math.floor((clock+a.phase)*(a.mode==='type'?6:a.mode==='sleep'?.8:1.5))%4;
+      a.frame=a.mode==='walk'?Math.floor(a.distance/4)%4:Math.floor((clock+a.phase)*metadata.animations[animationName(a)].fps)%metadata.animations[animationName(a)].frames.length;
     }
-  }
-  function monitor(d,a) {
-    // Only cover the existing monitor's dark interior, preserving its frame and desk.
-    if(a.mode!=='type'||a.requested!=='working')return;
-    const {x,y,w,h}=d.screen;
-    rect(x,y,w,h,'#547b80');rect(x+1,y+1,w-2,1,'#a6c8b2');
-    for(let i=0;i<3;i++) {
-      rect(x+2+i%2,y+4+i*3,6+i*3,1,i%2?'#eccb8a':'#b6d5b9');
-      rect(x+w-4,y+4+i*3,2,1,'#88aaa4');
-    }
-    if(Math.floor(clock*3)%2)rect(x+16,y+h-2,2,1,'#f3d99f');
   }
   function spriteBox(a) {
-    const s=layout.pixelScale;
-    return {x:layout.ox+(Math.round(a.x)-13)*s,y:layout.oy+headTop(a)*s,w:26*s,h:36*s};
+    const s=layout.pixelScale,b=bodyBox(a);
+    return {x:layout.ox+b.x*s,y:layout.oy+b.y*s,w:b.w*s,h:b.h*s};
   }
   const overlaps=(p,q,gap=0)=>p.x<q.x+q.w+gap&&p.x+p.w+gap>q.x&&p.y<q.y+q.h+gap&&p.y+p.h+gap>q.y;
   function updateLabels() {
@@ -317,7 +310,7 @@
     if(!shown.length)return;
     const scale=layout.pixelScale,room=wrap.getBoundingClientRect();
     const gap=Math.max(8,Math.round(scale)*2);
-    // Plates belong to the room, even when an integer zoom leaves a surround.
+    // Plates stay in the visible room, including when its edges are cropped.
     const bounds={
       left:Math.round(layout.ox+(scale<1?0:18*scale)),right:Math.round(layout.ox+(scale<1?480:466)*scale),
       top:Math.round(Math.max(layout.oy+(scale<1?0:10*scale),document.getElementById('bar').getBoundingClientRect().bottom-room.top+gap)),
@@ -331,7 +324,7 @@
       // Anchor to the resident's live coordinates, so a plate never waits at the
       // workstation a walker just left.
       const cx=layout.ox+Math.round(a.x)*scale;
-      const desired={x:Math.round(cx-w/2),y:Math.round(layout.oy+headTop(a)*scale-gap-h)};
+      const desired={x:Math.round(cx-w/2),y:Math.floor(layout.oy+headTop(a)*scale-gap-h)};
       // Stay over the resident's own head: lift the plate before stepping aside.
       const spots=[{x:desired.x,y:desired.y}];
       for(let step=1;step<=5;step++)spots.push({x:desired.x,y:desired.y-step*(h+gap)});
@@ -357,23 +350,23 @@
     const residentOf=residentId;
     // Tab/Enter/Space count as keyboard travel, the mouse does not: that is
     // what decides whether a focused resident keeps its plate on screen.
-    document.addEventListener('keydown',event=>{
+    listen(document,'keydown',event=>{
       if(['Tab','Enter',' '].includes(event.key)){keyboardNav=true;updateLabels();}
     });
-    document.addEventListener('pointerdown',()=>{
+    listen(document,'pointerdown',()=>{
       if(keyboardNav){keyboardNav=false;updateLabels();}
     });
-    document.addEventListener('focusin',()=>updateLabels());
-    document.addEventListener('focusout',()=>updateLabels());
+    listen(document,'focusin',()=>updateLabels());
+    listen(document,'focusout',()=>updateLabels());
     // Hover reveals a plate; a click pins one; clicking again, clicking empty
     // room space or pressing Escape puts it away.
     // Hover and pins repaint the plates right away; waiting for the next frame
     // would let a click look ignored for a moment.
-    layer.addEventListener('pointerover',event=>{
+    listen(layer,'pointerover',event=>{
       const id=residentOf(event.target);
       if(id&&id!==hoverSuppressed){hovered=id;updateLabels();}
     });
-    layer.addEventListener('pointerout',event=>{
+    listen(layer,'pointerout',event=>{
       const id=residentOf(event.target);if(!id)return;
       let repaint=false;
       if(hovered===id){hovered=null;repaint=true;}
@@ -384,7 +377,7 @@
         hoverSuppressed=null;
       if(repaint)updateLabels();
     });
-    layer.addEventListener('click',event=>{
+    listen(layer,'click',event=>{
       const id=residentOf(event.target);if(!id)return;
       if(pinned===id){pinned=null;hoverSuppressed=id;hovered=null;}
       else {pinned=id;hoverSuppressed=null;}
@@ -392,26 +385,27 @@
     });
     // Clicking any empty spot puts a pinned plate away; the greeting message's
     // own close button only closes the message.
-    document.addEventListener('click',event=>{
+    listen(document,'click',event=>{
       if(!residentOf(event.target)&&!event.target.closest?.('#interaction-note')){pinned=null;updateLabels();}
     });
-    document.addEventListener('keydown',event=>{
+    listen(document,'keydown',event=>{
       if(event.key==='Escape'){pinned=null;hovered=null;hoverSuppressed=null;updateLabels();}
     });
   }
   function render(now) {
+    animation=0;if(disposed||document.hidden)return;
     const dt=lastTime?Math.min((now-lastTime)/1000,.08):0;lastTime=now;clock+=dt;
     updateActors(dt);weather.draw(ctx,Date.now(),reduced.matches);
     const sky=weather.snapshot(),weatherLabel=document.getElementById('weather');
     if(weatherLabel.textContent!==sky.name) {
       weatherLabel.textContent=sky.name;canvas.dataset.weather=sky.kind;
-      document.body.dataset.time=sky.kind==='night'?'night':'day';updateRoster();
+      document.body.dataset.time=sky.kind==='night'?'night':'day';
+      document.documentElement.style.setProperty('--wall',sky.kind==='night'?roomSpec.nightPageBackground:roomSpec.pageBackground);updateRoster();
     }
-    layout.desks.forEach((d,i)=>monitor(d,actors[i]));
     const drawables=[];
     actors.forEach(a=>drawables.push({depth:a.y,draw:()=>{
-      const f=reduced.matches&&a.mode!=='walk'?0:a.frame;
-      sprite(`${a.sprite}-${a.mode}-${a.mode==='walk'?a.dir:0}-${f}`,a.x-13,headTop(a));
+      const f=frameIndex(a);
+      ctx.drawImage(sheets.get(a.sprite),(f%4)*64,Math.floor(f/4)*64,64,64,Math.round(a.x)-32,Math.round(a.y)-59,64,64);
       // The status icon rides along with its resident, even mid-stride, and
       // drifts upward while dozing so the nap still reads as a nap.
       const icon=iconBox(a);
@@ -419,7 +413,7 @@
     }}));
     drawables.sort((a,b)=>a.depth-b.depth).forEach(d=>d.draw());
     interaction.update(now);interaction.draw(ctx,now,reduced.matches);
-    updateLabels();requestAnimationFrame(render);
+    updateLabels();animation=requestAnimationFrame(render);
   }
   function createLabels() {
     labels.replaceChildren();
@@ -438,7 +432,7 @@
     const roster=document.getElementById('roster'),scroll=roster.scrollLeft;roster.replaceChildren();
     roster.classList.toggle('many-tools',tools.length>3);
     for(const [i,t] of tools.entries()) {
-      const a=actors.find(a=>a.id===t.id),color=a?.color||residents[i%residents.length].shirt;
+      const a=actors.find(a=>a.id===t.id),color=a?.color||COLORS[i%COLORS.length];
       const el=document.createElement('span');el.className='agent-status';
       const dot=document.createElement('i'),name=document.createElement('span'),state=document.createElement('em');
       el.style.setProperty('--agent-color',color);el.style.setProperty('--status-color',t.status==='working'?'#b9d59c':'#edc57e');
@@ -449,15 +443,16 @@
     canvas.setAttribute('aria-label',`${weather?.snapshot().name||''}阁楼；`+tools.map(t=>`${displayName(t)}：${t.status==='working'?'干活中':'摸鱼中'}`).join('；'));
   }
   async function poll() {
-    if(polling)return;polling=true;
+    if(polling||disposed)return;polling=true;
+    requestController=new AbortController();const timeout=setTimeout(()=>requestController?.abort(),15000);
     try {
       // A cold Windows process snapshot can take several seconds after a restart.
       // Keep one request in flight so short abort/retry cycles cannot pile up scans.
-      const response=await fetch('api/status',{cache:'no-store',signal:AbortSignal.timeout(15000)});
+      const response=await fetch('api/status',{cache:'no-store',signal:requestController.signal});
       if(!response.ok)throw new Error(`HTTP ${response.status}`);
       const data=await response.json();
       if(!Array.isArray(data.agents)||!Number.isFinite(data.ts))throw new Error('Invalid status response');
-      latest=data;polls++;connected=true;
+      if(disposed)return;latest=data;polls++;connected=true;
       syncTools(data.agents);
       for(const a of actors) {
         const status=data.agents.find(s=>s.id===a.id)?.status;
@@ -471,19 +466,20 @@
       document.getElementById('connection').textContent='已同步';document.getElementById('signal').className='signal live';
       notice.hidden=true;updateRoster();
     } catch {
-      connected=false;document.getElementById('connection').textContent='正在重连';document.getElementById('signal').className='signal error';
+      if(disposed)return;connected=false;document.getElementById('connection').textContent='正在重连';document.getElementById('signal').className='signal error';
       notice.textContent=latest?'暂时无法同步，保留上次状态 · 正在重连':'无法连接小阁 · 正在重连';notice.hidden=false;
-    } finally {polling=false;}
+    } finally {clearTimeout(timeout);requestController=null;polling=false;}
   }
   Object.defineProperty(window,'officeDebug',{value:Object.freeze({
     snapshot:()=>({ready:initialized,connected,polls,clock,zoom:layout?.zoom,width:layout?.w,height:layout?.h,
       sample:layout?.sample,pixelScale:layout?.pixelScale,ox:layout?.ox,oy:layout?.oy,
-      background:background?.getAttribute('src'),smoothing:ctx.imageSmoothingEnabled,
+      background:(weather?.snapshot().kind==='night'?nightBackground:background)?.getAttribute('src'),smoothing:ctx.imageSmoothingEnabled,
       weather:weather?.snapshot(),interactions:interaction?.snapshot(),capacity:CAPACITY,tools:tools.map(t=>({...t})),
       nameplates:{hovered,pinned,visible:actors.filter(a=>!a.label?.hidden).map(a=>a.id)},
-      actors:actors.map(a=>({id:a.id,name:a.name,sprite:a.sprite,slot:a.slot,x:a.x,y:a.y,mode:a.mode,frame:a.frame,dir:a.dir,requested:a.requested,
+      lifecycle:{disposed,animation:!!animation,pollTimer:!!pollTimer,sheets:sheets.size,weatherBuilds},
+      actors:actors.map(a=>({id:a.id,name:a.name,characterName:a.characterName,sprite:a.sprite,body:bodyBox(a),spriteFrame:frameIndex(a),slot:a.slot,x:a.x,y:a.y,mode:a.mode,frame:a.frame,dir:a.dir,requested:a.requested,pending:a.pending?{...a.pending}:null,
         idleSlot:a.idleSlot,idleChanges:a.idleChanges,route:a.route.map(p=>({...p})),
-        target:initialized?destination(a):null,walkable:initialized?walkable(a.x,a.y):false,
+        target:initialized?destination(a):null,walkable:initialized?walkable(a.x,a.y,a):false,
         icon:initialized?iconBox(a):null,
         monitorOn:a.mode==='type'&&a.requested==='working'})),
       obstacles:layout?.blocks.map(b=>({...b})),stations:layout?.desks.map(d=>({...d})),
@@ -491,27 +487,73 @@
       spots:layout?.spots.map(p=>({...p,walkable:walkable(p.x,p.y)})),
     }),
   }),writable:false});
+  function suspend() {cancelAnimationFrame(animation);animation=0;clearInterval(pollTimer);pollTimer=0;lastTime=0;}
+  function resume(refresh=true) {
+    if(disposed||document.hidden)return;
+    weather.update();if(refresh)poll();
+    if(!animation)animation=requestAnimationFrame(render);
+    if(!pollTimer)pollTimer=setInterval(poll,3000);
+  }
+  function dispose() {
+    if(disposed)return;disposed=true;suspend();requestController?.abort();
+    resizeObserver?.disconnect();lifecycle.abort();interaction?.dispose();weather?.dispose();sheets.clear();
+  }
   async function start() {
     try {
-      const image=new Image();image.src='static/assets/office-atlas.png';
-      const room=new Image();room.src='static/assets/attic-bg-2.png';
-      const json=url=>fetch(url).then(r=>{if(!r.ok)throw new Error(`Missing ${url}`);return r.json();});
-      const [,,data,looks,zones]=await Promise.all([image.decode(),room.decode(),json('static/assets/office-atlas.json'),json('static/assets/residents.json'),json('static/interaction-zones.json')]);
-      if(zones.coordinateSpace?.width!==ROOM.w||zones.coordinateSpace?.height!==ROOM.h||!Array.isArray(zones.plants)||!zones.teaTable)throw new Error('Invalid interaction zones');
+      const loadImage=async url=>{const img=new Image();img.src=url;await img.decode();return img;};
+      const json=async url=>{const r=await fetch(url,{signal:lifecycle.signal});if(!r.ok)throw new Error(`Missing ${url}`);return r.json();};
+      const [room,night,source,manifest,zones]=await Promise.all([
+        loadImage('static/assets/bg-c.png'),loadImage('static/assets/bg-c-night.png'),
+        json('static/assets/layout.json'),json('static/assets/sprites/manifest.json'),json('static/interaction-zones.json')]);
+      roomSpec=source.images.find(i=>i.id==='bg-c');
+      if(!roomSpec||roomSpec.workstations.length!==CAPACITY||manifest.characters.length!==CAPACITY||
+        zones.coordinateSpace?.width!==ROOM.w||zones.coordinateSpace?.height!==ROOM.h||!Array.isArray(zones.plants)||!zones.teaTable)
+        throw new Error('Invalid room configuration');
       const zoneIds=new Set();
       for(const z of [...zones.plants,zones.teaTable]) {
         if(typeof z.id!=='string'||!z.id||zoneIds.has(z.id)||typeof z.name!=='string'||
-          !['x','y','w','h'].every(k=>Number.isFinite(z[k]))||z.x<0||z.y<0||z.w<=0||z.h<=0||
-          z.x+z.w>ROOM.w||z.y+z.h>ROOM.h)throw new Error('Invalid interaction zone');
+          !['x','y','w','h'].every(k=>Number.isFinite(z[k]))||z.x<0||z.y<0||z.w<=0||z.h<=0||z.x+z.w>ROOM.w||z.y+z.h>ROOM.h)
+          throw new Error('Invalid interaction zone');
         zoneIds.add(z.id);
       }
-      atlas=image;background=room;metadata=data;residents=looks;fit();
-      followResidents();
-      interaction=AtticInteractions.create({canvas,getActors:()=>actors,getLayout:()=>layout,isConnected:()=>connected,zones});
-      await poll();updateRoster();document.getElementById('loading').hidden=true;
-      requestAnimationFrame(render);setInterval(poll,3000);new ResizeObserver(fit).observe(wrap);
-      document.addEventListener('visibilitychange',()=>{lastTime=0;if(!document.hidden){weather.update();poll();}});
-    } catch(error) {document.getElementById('loading').textContent='素材加载失败，请刷新页面';console.error(error);}
+      metadata=manifest;residents=manifest.characters;background=room;nightBackground=night;
+      for(const look of residents)look.actionBounds=Object.fromEntries(Object.entries(metadata.animations).map(([name,animation])=>{
+        const bounds=animation.frames.map(f=>look.bounds[f]);
+        return [name,{left:Math.min(...bounds.map(b=>b[0])),top:Math.min(...bounds.map(b=>b[1])),
+          right:Math.max(...bounds.map(b=>b[2])),bottom:Math.max(...bounds.map(b=>b[3]))}];
+      }));
+      for(const look of residents) {
+        const bounds=Object.entries(look.actionBounds).filter(([name])=>name.startsWith('walk_')).map(([,b])=>b);
+        look.walkBounds={left:Math.min(...bounds.map(b=>b.left)),top:Math.min(...bounds.map(b=>b.top)),
+          right:Math.max(...bounds.map(b=>b.right)),bottom:Math.max(...bounds.map(b=>b.bottom))};
+      }
+      await Promise.all(residents.map(async look=>sheets.set(look.id,await loadImage(`static/assets/${look.file}`))));
+      if(disposed)return;
+      const buffer=document.createElement('canvas');buffer.width=256;buffer.height=384;
+      const bc=buffer.getContext('2d',{willReadFrequently:true});
+      for(const look of residents) {
+        bc.clearRect(0,0,256,384);bc.drawImage(sheets.get(look.id),0,0);
+        const pixels=bc.getImageData(0,0,256,384).data;
+        look.actionMasks=Object.fromEntries(Object.entries(metadata.animations).map(([name,animation])=>{
+          const mask=new Uint8Array(64*64);
+          for(const f of animation.frames)for(let y=0;y<64;y++)for(let x=0;x<64;x++)
+            if(pixels[(((f>>2)*64+y)*256+(f%4)*64+x)*4+3])mask[y*64+x]=1;
+          return [name,mask];
+        }));
+        look.walkMask=new Uint8Array(64*64);
+        for(const [name,mask] of Object.entries(look.actionMasks))if(name.startsWith('walk_'))
+          mask.forEach((v,i)=>{if(v)look.walkMask[i]=1;});
+      }
+      buffer.width=0;buffer.height=0;
+      weather=AtticWeather.create(background,Date.now(),nightBackground);weatherBuilds++;fit();followResidents();
+      interaction=AtticInteractions.create({canvas,getActors:()=>actors,getLayout:()=>layout,isConnected:()=>connected,zones,getBody:bodyBox});
+      await poll();if(disposed)return;updateRoster();document.getElementById('loading').hidden=true;
+      resizeObserver=new ResizeObserver(fit);resizeObserver.observe(wrap);
+      listen(document,'visibilitychange',()=>{if(document.hidden)suspend();else resume();});
+      listen(window,'pagehide',event=>{if(event.persisted)suspend();else dispose();});
+      listen(window,'pageshow',event=>{if(event.persisted)resume();});
+      resume(false);
+    } catch(error) {if(!disposed){document.getElementById('loading').textContent='素材加载失败，请刷新页面';console.error(error);dispose();}}
   }
   start();
 })();

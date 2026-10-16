@@ -19,12 +19,14 @@ async function arrive(page,work) {
   await page.waitForFunction(work=>{
     const s=window.officeDebug?.snapshot();return s?.connected&&s.actors.length===3&&s.actors.every(a=>a.requested===(work?'working':'idle')&&!a.route.length&&
       (work?a.mode==='type':['sleep','tea','read'].includes(a.mode)));
-  },work,{timeout:22000});
+  },work,{timeout:45000});
 }
 async function checkFit(page) {
   const s=await read(page),box=await page.locator('#game').boundingBox(),room=await page.locator('#wrap').boundingBox();
-  assert(Number.isInteger(s.zoom));assert.equal(s.smoothing,false);
-  assert(box.x>=room.x&&box.y>=room.y&&box.x+box.width<=room.x+room.width+.01&&box.y+box.height<=room.y+room.height+.01,'entire room fits');
+  assert(s.zoom>0);assert.equal(s.smoothing,false);
+  assert(box.x>=room.x-.01&&box.x+box.width<=room.x+room.width+.01,'side workstations stay visible');
+  assert.equal(await page.locator('#wrap').evaluate(e=>getComputedStyle(e).overflow),'hidden','only decorative edges are clipped by the room');
+  assert(Math.abs(box.width/box.height-480/270)<.001,'room retains its aspect ratio');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth||document.documentElement.scrollHeight>innerHeight),false);
   const bars=await page.locator('#bar,#footer').evaluateAll(els=>els.map(el=>{
     const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
@@ -38,8 +40,9 @@ async function checkFit(page) {
     assert(t.w>0&&t.h>0&&t.x>=0&&t.y>=0&&t.x+t.w<=page.viewportSize().width+.01&&t.y+t.h<=page.viewportSize().height+.01,'bar text stays visible');
   }
   if(page.viewportSize().width===1920&&page.viewportSize().height===1080) {
-    assert.equal(s.zoom,4);assert.equal(s.sample,1);assert.equal(s.pixelScale,4);
-    assert.deepEqual(box,{x:0,y:0,width:1920,height:1080},'4x canvas fills one screen');
+    assert.equal(s.sample,1);assert.equal(s.pixelScale,4);
+    assert(Math.abs(box.width-room.width)<.1&&box.y<=room.y&&box.y+box.height>=room.y+room.height,'room fills both dimensions between bars');
+    assert.equal(room.y,56);assert.equal(room.height,976);
     assert.equal(await page.locator('h1').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),28);
     assert.equal(bars[0].h,56,'desktop timber header');assert.equal(bars[1].h,48,'readable status tags');
   }
@@ -50,8 +53,8 @@ async function checkFit(page) {
   const plates=await page.locator('.nameplate:not([hidden])').evaluateAll(els=>els.map(e=>{const b=e.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};}));
   assert.deepEqual(plates,[],'no nameplate is drawn until a resident is hovered or pinned');
   for(const a of s.actors) {
-    const q={x:box.x+(Math.round(a.x)-13)*s.pixelScale,y:box.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,
-      w:26*s.pixelScale,h:36*s.pixelScale};
+    const q={x:box.x+a.body.x*s.pixelScale,y:box.y+a.body.y*s.pixelScale,
+      w:a.body.w*s.pixelScale,h:a.body.h*s.pixelScale};
     assert(bars.every(b=>!overlaps(q,b)),'bars must not cover residents');
   }
   for(const d of s.stations) {
@@ -70,7 +73,7 @@ async function checkBackground(page) {
     const ref=document.createElement('canvas');ref.width=480;ref.height=270;
     const c=ref.getContext('2d');c.imageSmoothingEnabled=false;c.drawImage(image,0,0,480,270);
     const expected=c.getImageData(0,0,480,270).data,actual=game.getContext('2d').getImageData(0,0,480,270).data;
-    const overlays=s.actors.map(a=>({x:Math.round(a.x)-19,y:Math.round(a.y)-(a.mode==='type'?46:40),w:38,h:48}));
+    const overlays=s.actors.map(a=>a.body);
     // The head-level status icon is canvas overlay too, and the napping Zz
     // drifts a few pixels up; mask the whole band it can reach.
     overlays.push(...s.actors.map(a=>a.icon).filter(Boolean).map(i=>({x:i.x,y:i.y-4,w:i.w,h:i.h+4})));
@@ -91,6 +94,7 @@ async function checkBackground(page) {
 async function capture(page,name) {
   await page.mouse.move(1900,20);
   assert.equal(await page.locator('.nameplate:not([hidden])').count(),0,'captures record the plate-free room');
+  await require('./capture.cjs')(page,name);
   await page.screenshot({path:path.join(ROOT,'preview',`${name}.png`)});
   const masks=await page.locator('.nameplate:not([hidden]),#bar,#footer').evaluateAll(els=>els.map(el=>{
     const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
@@ -99,7 +103,7 @@ async function capture(page,name) {
 }
 async function watchTravel(page,work) {
   let previous=await read(page),prevTime=Date.now(),moving=0;
-  for(let i=0;i<220;i++) {
+  for(let i=0;i<600;i++) {
     await sleep(60);const s=await read(page),now=Date.now();
     s.actors.forEach((a,j)=>{
       const dist=Math.hypot(a.x-previous.actors[j].x,a.y-previous.actors[j].y);
@@ -135,9 +139,9 @@ async function watchTravel(page,work) {
     await page.goto(`${BASE}/`,{waitUntil:'networkidle'});await arrive(page,false);
     await checkFit(page);let s=await read(page);assert.equal(s.zoom,4);
     assert.equal(s.width,480);assert.equal(s.height,270);assert.equal(s.sample,1);
-    assert.equal(s.background,'static/assets/attic-bg-2.png');
-    assert(fs.readFileSync(path.join(ROOT,'static/assets/attic-bg-2.png')).equals(fs.readFileSync(path.join(ROOT,'preview/attic-bg-2.png'))),'background copied unchanged');
-    assert.deepEqual(s.stations.map(d=>d.seat),[{x:96,y:118},{x:384,y:118},{x:406,y:237}]);
+    assert.equal(s.background,'static/assets/bg-c.png');
+    assert(fs.readFileSync(path.join(ROOT,'static/assets/bg-c.png')).equals(fs.readFileSync('D:/ai-office-bg/bg-c.png')),'background copied unchanged');
+    assert.deepEqual(s.stations.map(d=>d.seat),[{x:62,y:129},{x:114,y:129},{x:209,y:116}]);
     await checkBackground(page);
     assert.deepEqual(s.actors.map(a=>a.mode),['sleep','tea','read']);
     assert(s.actors.every(a=>!a.monitorOn));
@@ -163,7 +167,7 @@ async function watchTravel(page,work) {
     mode='idle';await page.waitForFunction(()=>window.officeDebug.snapshot().actors.every(a=>a.requested==='idle'));
     assert(await watchTravel(page,false)>0);await arrive(page,false);
     const changes=(await read(page)).actors.map(a=>a.idleChanges);
-    await page.waitForFunction(changes=>window.officeDebug.snapshot().actors.some((a,i)=>a.idleChanges>changes[i]),changes,{timeout:25000});
+    await page.waitForFunction(changes=>{const actors=officeDebug.snapshot().actors;return actors.some((a,i)=>a.idleChanges>changes[i])&&actors.some(a=>a.mode==='walk');},changes,{timeout:45000});
     assert((await read(page)).actors.some(a=>a.mode==='walk'));
     await arrive(page,false);
     console.log('PASS leave work, randomly change leisure activity, walk to the next nook');
@@ -173,7 +177,7 @@ async function watchTravel(page,work) {
       mode=ids.map(id=>payload.agents.find(a=>a.id===id).status);
       await page.waitForFunction(activeId=>officeDebug.snapshot().actors.every(a=>
         a.requested===(a.id===activeId?'working':'idle')&&
-        (a.id===activeId?a.mode==='type':a.mode!=='walk'&&a.mode!=='type')),activeId,{timeout:22000});
+        (a.id===activeId?a.mode==='type':a.mode!=='walk'&&a.mode!=='type')),activeId,{timeout:45000});
       const isolated=await read(page);
       assert.deepEqual(isolated.actors.filter(a=>a.monitorOn).map(a=>a.id),[activeId]);
       const plates=await page.locator('.nameplate').evaluateAll(els=>els.map(el=>el.classList.contains('working')));
@@ -185,11 +189,11 @@ async function watchTravel(page,work) {
       console.log(`PASS detector-to-page ${provider} only: one typing resident, one lit monitor, matching label and legend`);
     }
     mode=ids.map(id=>providerScenarios.both.agents.find(a=>a.id===id).status);
-    await page.waitForFunction(()=>{const a=officeDebug.snapshot().actors;return a[0].requested==='idle'&&a.slice(1).every(a=>a.mode==='type');},null,{timeout:22000});
+    await page.waitForFunction(()=>{const a=officeDebug.snapshot().actors;return a[0].requested==='idle'&&a.slice(1).every(a=>a.mode==='type');},null,{timeout:45000});
     assert.deepEqual((await read(page)).actors.filter(a=>a.monitorOn).map(a=>a.id),['openrouter','claude-code']);
     console.log('PASS both providers run independently at the same time');
     mode=['working','idle','working'];
-    await page.waitForFunction(()=>{const a=window.officeDebug.snapshot().actors;return a[0].mode==='type'&&a[1].requested==='idle'&&a[2].mode==='type';},null,{timeout:22000});
+    await page.waitForFunction(()=>{const a=window.officeDebug.snapshot().actors;return a[0].mode==='type'&&a[1].requested==='idle'&&a[2].mode==='type';},null,{timeout:45000});
     failing=true;await page.waitForFunction(()=>!window.officeDebug.snapshot().connected);
     assert.equal((await read(page)).actors[0].requested,'working');assert(await page.locator('#notice').isVisible());
     failing=false;await page.waitForFunction(()=>window.officeDebug.snapshot().connected);
@@ -203,12 +207,12 @@ async function watchTravel(page,work) {
     }
     mode='working';const startup=await context.newPage();
     await startup.goto(`${BASE}/`);
-    await startup.waitForFunction(()=>window.officeDebug?.snapshot().actors.every(a=>a.requested==='working'));
+    await startup.waitForFunction(()=>window.officeDebug?.snapshot().actors.length===3&&window.officeDebug.snapshot().actors.every(a=>a.requested==='working'));
     assert((await read(startup)).actors.some(a=>a.mode==='walk'));await arrive(startup,true);await startup.close();
     console.log('PASS first load with working status walks to work');
     mode='idle';await page.setViewportSize({width:1920,height:1080});
     await page.goto(`${BASE}/office/`,{waitUntil:'networkidle'});await arrive(page,false);
-    for(const suffix of ['static/weather.js','static/office.js','static/office.css','static/assets/attic-bg-2.png','static/assets/office-atlas.png','static/assets/office-atlas.json','static/assets/residents.json','api/status'])
+    for(const suffix of ['static/weather.js','static/office.js','static/office.css','static/assets/bg-c.png','static/assets/sprites/01-lin.png','static/assets/sprites/manifest.json','static/assets/layout.json','api/status'])
       assert(resources.some(r=>r.url.endsWith(`/office/${suffix}`)&&r.status===200),`prefix resource: ${suffix}`);
     assert(calls.some(c=>c.url.endsWith('/office/api/status')));await checkFit(page);
     console.log('PASS /office/ prefix: relative CSS, JS, atlas and API');

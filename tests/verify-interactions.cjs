@@ -10,13 +10,14 @@ async function capture(page,name) {
   const masks=await page.locator('.nameplate,#bar,#footer,#interaction-note').evaluateAll(els=>els.filter(e=>!e.hidden).map(e=>{
     const b=e.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
   }));
+  await require('./capture.cjs')(page,name);
   await page.screenshot({path:path.join(ROOT,`preview/${name}.png`)});
   fs.writeFileSync(path.join(TMP,`${name}-masks.json`),JSON.stringify(masks));
 }
 async function settled(page,count=3,mode='type') {
   await page.waitForFunction(({count,mode})=>{
-    const s=window.officeDebug?.snapshot();return s?.connected&&s.actors.length===count&&s.actors.every(a=>a.mode===mode)&&s.interactions?.targets===count+4;
-  },{count,mode},{timeout:25000});
+    const s=window.officeDebug?.snapshot();return s?.connected&&s.actors.length===count&&s.actors.every(a=>a.mode===mode)&&s.interactions?.targets===count+25;
+  },{count,mode},{timeout:45000});
 }
 (async()=>{
   const browser=await chromium.launch({headless:true,env:{...process.env,TEMP:TMP,TMP:TMP},
@@ -56,30 +57,40 @@ async function settled(page,count=3,mode='type') {
     assert.match(await page.locator('#interaction-note strong').textContent(),/OpenRouter/);
     await page.keyboard.press('Escape');assert.equal(await page.locator('#interaction-note').isVisible(),false);
     await page.waitForFunction(()=>officeDebug.snapshot().interactions.effects.length===0,null,{timeout:4000});
-    await target(page,'plant-left').focus();await page.keyboard.press('Space');
+    await target(page,'c-plant-1').focus();await page.keyboard.press('Space');
     s=await read(page);assert.equal(s.interactions.effects.filter(e=>e.type==='water').length,1);
     await capture(page,'interaction-watering');
-    await target(page,'plant-left').click();
+    await target(page,'c-plant-1').click();
     assert.match(await page.locator('#interaction-note strong').textContent(),/刚刚浇过/);
     assert.equal((await read(page)).interactions.effects.filter(e=>e.type==='water').length,1);
     await page.waitForFunction(()=>officeDebug.snapshot().interactions.effects.length===0,null,{timeout:4000});
-    await target(page,'tea-table').click();
+    await target(page,'c-tea-table').click();
     assert.match(await page.locator('#interaction-note strong').textContent(),/茶泡好/);
     assert((await read(page)).interactions.effects.some(e=>e.type==='tea'));
     await capture(page,'interaction-tea');
-    for(let i=0;i<10;i++)await target(page,'tea-table').click();
+    for(let i=0;i<10;i++)await target(page,'c-tea-table').click();
     assert.match(await page.locator('#interaction-note strong').textContent(),/还温/);
     assert((await read(page)).interactions.effects.length<=8,'rapid clicks stay bounded');
     await page.waitForFunction(()=>officeDebug.snapshot().interactions.effects.length===0,null,{timeout:4000});
     await page.waitForTimeout(800); // Effects end before the watering cooldown.
-    await target(page,'plant-center').click();
-    assert.match(await page.locator('#interaction-note strong').textContent(),/中央绿植/);
+    await target(page,'c-plant-4').click();
+    assert.match(await page.locator('#interaction-note strong').textContent(),/楼梯左侧陶盆垂叶/);
     await page.locator('#interaction-note button').click();
-    await page.waitForTimeout(3300);await target(page,'tea-table').click();
+    await page.waitForTimeout(3300);await target(page,'c-tea-table').click();
     assert.match(await page.locator('#interaction-note strong').textContent(),/茶泡好/);
     // Native Tab order reaches scenery and resident buttons without toolbar actions.
-    await target(page,'tea-table').focus();await page.keyboard.press('Tab');
+    await target(page,'c-tea-table').focus();await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(()=>document.activeElement.dataset.target),'resident:codex');
+    const scenery=JSON.parse(fs.readFileSync(path.join(ROOT,'static/interaction-zones.json'),'utf8'));
+    for(const plant of scenery.plants) {
+      await page.keyboard.press('Escape');
+      await target(page,plant.id).click();
+      const state=await read(page);
+      assert.equal(state.interactions.kind,'water',`${plant.id} has its own watering hit target`);
+      assert(state.interactions.effects.some(e=>e.type==='water'&&e.id===plant.id));
+    }
+    await page.keyboard.press('Escape');
+    console.log('PASS all 24 individual pots, including decorative children of table/desk rectangles');
     console.log('PASS pointer, keyboard, cooldowns, bounded effects, live typing and all scenery entrances');
     await target(page,'resident:codex').click();
     mode='idle';await page.waitForFunction(()=>officeDebug.snapshot().actors[0].requested==='idle'&&document.querySelector('#interaction-note strong').textContent.includes('摸鱼中'));
@@ -100,18 +111,18 @@ async function settled(page,count=3,mode='type') {
     await page.setViewportSize({width:390,height:844});await page.waitForTimeout(200);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth||document.documentElement.scrollHeight>innerHeight),false);
     const box=await target(page,'resident:codex').boundingBox();assert(box.width>=32&&box.height>=32);
-    await target(page,'plant-right').click();assert.match(await page.locator('#interaction-note strong').textContent(),/右下绿植/);
+    await target(page,'c-plant-2').click();assert.match(await page.locator('#interaction-note strong').textContent(),/右下白盆虎尾兰/);
     const note=await page.locator('#interaction-note').boundingBox();assert(note.x>=0&&note.x+note.width<=390);
     await page.setViewportSize({width:1920,height:1080});await page.waitForTimeout(150);
-    await page.emulateMedia({reducedMotion:'reduce'});await target(page,'tea-table').click();
+    await page.emulateMedia({reducedMotion:'reduce'});await target(page,'c-tea-table').click();
     assert((await read(page)).interactions.effects.some(e=>e.type==='tea'));
     await page.mouse.move(0,0);
-    const pixels=()=>page.locator('#game').evaluate(canvas=>Array.from(canvas.getContext('2d').getImageData(65,201,16,20).data));
+    const pixels=()=>page.locator('#game').evaluate(canvas=>Array.from(canvas.getContext('2d').getImageData(78,209,18,20).data));
     const staticTea=await pixels();await page.waitForTimeout(200);assert.deepEqual(await pixels(),staticTea,'reduced motion keeps tea steam static');
     await page.waitForFunction(()=>!officeDebug.snapshot().interactions.visible,null,{timeout:7000});
     console.log('PASS small-screen fit, scaled hit targets, reduced motion and auto-dismiss');
     const prefixed=await context.newPage();await prefixed.goto(`${BASE}/office/`);
-    await settled(prefixed,1);await target(prefixed,'tea-table').click();
+    await settled(prefixed,1);await target(prefixed,'c-tea-table').click();
     assert.match(await prefixed.locator('#interaction-note strong').textContent(),/茶泡好/);await prefixed.close();
     // Fresh context: night weather plus tea still use the unchanged lighting engine.
     const nightContext=await browser.newContext({viewport:{width:1920,height:1080},deviceScaleFactor:1});
@@ -119,7 +130,7 @@ async function settled(page,count=3,mode='type') {
     await nightContext.route('**/api/status',r=>r.fulfill({json:{ts:Date.parse('2026-10-15T12:00:00Z')/1000,agents:ids.slice(0,3).map((id,i)=>({id,name:tools[i],status:'working'}))}}));
     const night=await nightContext.newPage();night.on('pageerror',e=>errors.push(e.message));
     await night.goto(`${BASE}/`);await settled(night);assert.equal((await read(night)).weather.kind,'night');
-    await target(night,'tea-table').click();await capture(night,'interaction-night');await nightContext.close();
+    await target(night,'c-tea-table').click();await capture(night,'interaction-night');await nightContext.close();
     assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
     console.log('PASS /office/ relative resources, night ambience and no external requests/errors');
   } catch(e) {

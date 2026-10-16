@@ -1,0 +1,1690 @@
+{
+  "version": 2,
+  "coordinateSystem": {
+    "width": 1920,
+    "height": 1080,
+    "origin": "top-left",
+    "xDirection": "right",
+    "yDirection": "down",
+    "units": "pixels",
+    "logicalWidth": 480,
+    "logicalHeight": 270,
+    "pixelScale": 4,
+    "rectFormat": "{x,y,width,height}",
+    "rectEdges": "left/top inclusive; right/bottom exclusive",
+    "workstationCoordinates": "每个工位x/y为椅子坐点；deskRect为桌面矩形；clickRect为工位点击区。bg-c额外提供sprite.topLeft与groundAnchor，禁止把椅子坐点误当脚底锚点。",
+    "scalingNote": "Coordinates refer to the full PNG. When using object-fit:contain, subtract the displayed image offset before scaling pointer coordinates to 1920x1080."
+  },
+  "images": [
+    {
+      "id": "a",
+      "file": "bg-a.png",
+      "title": "晴光木阁",
+      "width": 1920,
+      "height": 1080,
+      "pageBackground": "#182F22",
+      "description": "蜂蜜木色、鼠尾草绿；北墙横排六工位，左下沙发与方茶桌，四盆独立落地绿植，中央通道开阔。",
+      "workstations": [
+        {
+          "id": "a-workstation-1",
+          "x": 336,
+          "y": 348,
+          "facing": "north",
+          "deskRect": {
+            "x": 248,
+            "y": 224,
+            "width": 180,
+            "height": 100
+          },
+          "clickRect": {
+            "x": 244,
+            "y": 220,
+            "width": 188,
+            "height": 168
+          }
+        },
+        {
+          "id": "a-workstation-2",
+          "x": 592,
+          "y": 348,
+          "facing": "north",
+          "deskRect": {
+            "x": 504,
+            "y": 224,
+            "width": 180,
+            "height": 100
+          },
+          "clickRect": {
+            "x": 500,
+            "y": 220,
+            "width": 188,
+            "height": 168
+          }
+        },
+        {
+          "id": "a-workstation-3",
+          "x": 840,
+          "y": 348,
+          "facing": "north",
+          "deskRect": {
+            "x": 748,
+            "y": 224,
+            "width": 180,
+            "height": 100
+          },
+          "clickRect": {
+            "x": 744,
+            "y": 220,
+            "width": 188,
+            "height": 168
+          }
+        },
+        {
+          "id": "a-workstation-4",
+          "x": 1084,
+          "y": 348,
+          "facing": "north",
+          "deskRect": {
+            "x": 1000,
+            "y": 224,
+            "width": 180,
+            "height": 100
+          },
+          "clickRect": {
+            "x": 996,
+            "y": 220,
+            "width": 188,
+            "height": 168
+          }
+        },
+        {
+          "id": "a-workstation-5",
+          "x": 1336,
+          "y": 348,
+          "facing": "north",
+          "deskRect": {
+            "x": 1240,
+            "y": 224,
+            "width": 180,
+            "height": 100
+          },
+          "clickRect": {
+            "x": 1236,
+            "y": 220,
+            "width": 188,
+            "height": 168
+          }
+        },
+        {
+          "id": "a-workstation-6",
+          "x": 1584,
+          "y": 348,
+          "facing": "north",
+          "deskRect": {
+            "x": 1492,
+            "y": 224,
+            "width": 180,
+            "height": 100
+          },
+          "clickRect": {
+            "x": 1488,
+            "y": 220,
+            "width": 188,
+            "height": 168
+          }
+        }
+      ],
+      "plants": [
+        {
+          "id": "a-plant-1",
+          "name": "左侧落地盆栽",
+          "clickRect": {
+            "x": 116,
+            "y": 388,
+            "width": 184,
+            "height": 184
+          },
+          "wateringPoint": {
+            "x": 204,
+            "y": 532
+          }
+        },
+        {
+          "id": "a-plant-2",
+          "name": "右上落地盆栽",
+          "clickRect": {
+            "x": 1596,
+            "y": 392,
+            "width": 192,
+            "height": 196
+          },
+          "wateringPoint": {
+            "x": 1688,
+            "y": 552
+          }
+        },
+        {
+          "id": "a-plant-3",
+          "name": "楼梯右侧落地盆栽",
+          "clickRect": {
+            "x": 1088,
+            "y": 744,
+            "width": 188,
+            "height": 188
+          },
+          "wateringPoint": {
+            "x": 1184,
+            "y": 896
+          }
+        },
+        {
+          "id": "a-plant-4",
+          "name": "右下落地盆栽",
+          "clickRect": {
+            "x": 1560,
+            "y": 756,
+            "width": 196,
+            "height": 184
+          },
+          "wateringPoint": {
+            "x": 1656,
+            "y": 904
+          }
+        }
+      ],
+      "teaTable": {
+        "id": "a-tea-table",
+        "shape": "rectangle",
+        "clickRect": {
+          "x": 368,
+          "y": 828,
+          "width": 224,
+          "height": 124
+        },
+        "teaSpawnPoint": {
+          "x": 468,
+          "y": 876
+        }
+      },
+      "loungeRect": {
+        "x": 212,
+        "y": 620,
+        "width": 544,
+        "height": 352
+      },
+      "validation": {
+        "workstationCount": 6,
+        "plantCount": 4,
+        "teaTableCount": 1,
+        "clickRegionsVisuallyChecked": true
+      },
+      "generation": {
+        "mode": "built-in image_gen",
+        "originalArtwork": true,
+        "prompts": [
+          "Generate a beautiful ORIGINAL cozy attic coworking studio GAME BACKGROUND, perpendicular 90-degree TOP-DOWN FLOOR PLAN view. Exact desired export 1920x1080. A flat orthographic overhead map with screen horizontal x and vertical y axes. Camera directly above ceiling aimed straight down, NOT 45 degrees, NOT an isometric dollhouse, NOT front-facing objects. You see TOP surfaces of tables, TOP cushions of sofa, TOP of chair seats, round planters with radial leaves. Monitor screens appear as narrow dark bars from overhead, never upright big front-facing screens. NO visible desk legs or cupboard fronts. No perspective taper. This top-down requirement is essential.\nTrue low-resolution PIXEL ART: imagine hand-drawn 480x270 game pixels with chunky clear silhouettes, then 4x nearest-neighbor enlargement to 1920x1080. Flat limited 32-color palette, clean solid pixel clusters, 1 logical-pixel outlines, NO painterly rendering, NO smooth textures, NO high-res detail, NO noise, NO antialiasing, NO glossy render, NO blur. Honey-colored oak, cream, sage green, terracotta, dark forest green outline, amber lamps, restrained powder blue skylights.\nWide rectangular room x=64..1856, y=56..1024. Perimeter beam visible as a narrow flat cutaway border. North sloping-roof strip along y=56..224 with two inset skylights and short exposed rafters; roof strip rendered as flat overhead architecture, not a big front-facing wall. Ceiling over rest of room removed to reveal floor. Subtle daylight blocks and amber wall lamps.\nExactly SIX compact individual desks along north wall below skylight strip, evenly spaced at x~320,576,832,1088,1344,1600, y~324. Each desk clearly separated, one narrow overhead monitor bar at its top edge, small keyboard, one empty sage chair immediately below. Workspace tops seen strictly vertically from above. No seventh station.\nLounge in southwest quarter: a comfortable cream and sage sofa seen directly from above at x=300..740,y=660..816. A sage and pale-cream woven rectangular rug at x=240..820,y=616..960. ONE rectangular oak tea table at x=420..648,y=824..932, with one little white teapot and two cups, no other tea tables.\nExactly FOUR isolated floor plants: a large single pot centered at (180,540), a single pot (1740,520), a single pot (1120,880), a single pot (1720,900). Each overhead radial leafy cluster has a visible terracotta pot rim, plenty of bare floor around it. These are the ONLY plants. No plant groups or hanging vines.\nCentral floor deliberately quiet and open for future little walking characters, currently NO characters. Small southern central stair hatch acceptable, seen as rectangular top-down stairs. Uniform honey wood floorboards, sparse simple marks, readable visual hierarchy.\nOutside room is a solid deep forest green margin. Original welcoming game art with exquisite color discipline, not an architectural CAD diagram. No text, no labels, no numbers, no lettering, no logos, no UI, no characters, no animals. One single complete scene.",
+          "Edit this generated attic room image. Remove ONLY the six tiny potted plants sitting on the six north-wall work desks. Restore plain unobstructed wooden desktop where each tiny pot was. Do not replace them with any objects. There should be exactly FOUR potted plants remaining in the entire room: the four existing large isolated FLOOR planters. Preserve those four completely. Preserve all six workstations, the six chairs, their positions, skylights, lamps, sofa, tea table and teapot, stairs, room geometry, camera framing and honey/sage palette. Maintain the strict top-down game-map view and chunky clean pixel-art look. No text or people. The final requested delivery is 1920x1080, on a single consistent 480x270 logical pixel canvas enlarged exactly 4x with nearest neighbor; use simple solid pixel clusters and no noise. Do not add new furnishings or plants. One complete image only."
+        ]
+      }
+    },
+    {
+      "id": "b",
+      "file": "bg-b.png",
+      "title": "青影茶阁",
+      "width": 1920,
+      "height": 1080,
+      "pageBackground": "#1A3038",
+      "description": "温润胡桃木与青绿沙发；左右墙各三工位，中央圆茶桌，三盆分开的绿植，天窗光影较柔和。",
+      "workstations": [
+        {
+          "id": "b-workstation-1",
+          "x": 252,
+          "y": 308,
+          "facing": "west",
+          "deskRect": {
+            "x": 108,
+            "y": 192,
+            "width": 104,
+            "height": 228
+          },
+          "clickRect": {
+            "x": 100,
+            "y": 184,
+            "width": 204,
+            "height": 248
+          }
+        },
+        {
+          "id": "b-workstation-2",
+          "x": 252,
+          "y": 552,
+          "facing": "west",
+          "deskRect": {
+            "x": 108,
+            "y": 444,
+            "width": 104,
+            "height": 228
+          },
+          "clickRect": {
+            "x": 100,
+            "y": 436,
+            "width": 204,
+            "height": 248
+          }
+        },
+        {
+          "id": "b-workstation-3",
+          "x": 252,
+          "y": 804,
+          "facing": "west",
+          "deskRect": {
+            "x": 108,
+            "y": 696,
+            "width": 104,
+            "height": 228
+          },
+          "clickRect": {
+            "x": 100,
+            "y": 688,
+            "width": 204,
+            "height": 256
+          }
+        },
+        {
+          "id": "b-workstation-4",
+          "x": 1664,
+          "y": 308,
+          "facing": "east",
+          "deskRect": {
+            "x": 1712,
+            "y": 192,
+            "width": 104,
+            "height": 228
+          },
+          "clickRect": {
+            "x": 1616,
+            "y": 184,
+            "width": 208,
+            "height": 248
+          }
+        },
+        {
+          "id": "b-workstation-5",
+          "x": 1664,
+          "y": 552,
+          "facing": "east",
+          "deskRect": {
+            "x": 1712,
+            "y": 444,
+            "width": 104,
+            "height": 228
+          },
+          "clickRect": {
+            "x": 1616,
+            "y": 436,
+            "width": 208,
+            "height": 248
+          }
+        },
+        {
+          "id": "b-workstation-6",
+          "x": 1664,
+          "y": 804,
+          "facing": "east",
+          "deskRect": {
+            "x": 1712,
+            "y": 696,
+            "width": 104,
+            "height": 228
+          },
+          "clickRect": {
+            "x": 1616,
+            "y": 688,
+            "width": 208,
+            "height": 256
+          }
+        }
+      ],
+      "plants": [
+        {
+          "id": "b-plant-1",
+          "name": "中上偏左落地盆栽",
+          "clickRect": {
+            "x": 584,
+            "y": 236,
+            "width": 172,
+            "height": 184
+          },
+          "wateringPoint": {
+            "x": 660,
+            "y": 392
+          }
+        },
+        {
+          "id": "b-plant-2",
+          "name": "中上偏右落地盆栽",
+          "clickRect": {
+            "x": 1204,
+            "y": 236,
+            "width": 176,
+            "height": 180
+          },
+          "wateringPoint": {
+            "x": 1288,
+            "y": 388
+          }
+        },
+        {
+          "id": "b-plant-3",
+          "name": "休息区右下落地盆栽",
+          "clickRect": {
+            "x": 1240,
+            "y": 732,
+            "width": 188,
+            "height": 200
+          },
+          "wateringPoint": {
+            "x": 1332,
+            "y": 896
+          }
+        }
+      ],
+      "teaTable": {
+        "id": "b-tea-table",
+        "shape": "circle",
+        "clickRect": {
+          "x": 880,
+          "y": 720,
+          "width": 164,
+          "height": 148
+        },
+        "teaSpawnPoint": {
+          "x": 960,
+          "y": 780
+        }
+      },
+      "loungeRect": {
+        "x": 676,
+        "y": 536,
+        "width": 568,
+        "height": 348
+      },
+      "validation": {
+        "workstationCount": 6,
+        "plantCount": 3,
+        "teaTableCount": 1,
+        "clickRegionsVisuallyChecked": true
+      },
+      "generation": {
+        "mode": "built-in image_gen",
+        "originalArtwork": true,
+        "prompts": [
+          "Draw ONE ORIGINAL pixel-art background: cozy attic coworking room as a TRUE TOP-DOWN 90 DEGREE OVERHEAD GAME MAP. Wide 16:9, target 1920x1080. Absolutely flat orthographic camera vertically above, a plan view, NO isometric view, NO angled camera, NO front-facing furniture. Tables are rectangles seen from above, monitors are thin edge-on bars, chairs and sofa show top cushions. All room edges horizontal or vertical, no perspective.\nStrong authentic low-resolution hand-crafted PIXEL ART, logical canvas 480x270 with each logical pixel enlarged to an axis-aligned solid 4x4 block. Crisp disciplined simple shapes and deliberately chunky clusters, beautifully restrained 32-color ramp, flat cel-like stepped pixel shading. No texture noise, no tiny details, no blur, no antialiasing, no smooth glow, no painted strokes. Light WALNUT wood plank floor, muted jade/teal fabric, warm ivory, aged brass amber lanterns, dusty cornflower blue skylights, forest-green foliage, terracotta pots, deep desaturated teal shadows. Welcoming soft late afternoon light, bright readable floor and furniture, not dark and not muddy.\nA warm distinctive attic studio with a wide rectangular floor and timber eaves. Along the NORTH/top border a narrow strip of sloped roof with two clear inset blue skylights, beams and three amber wall lamps; the main ceiling is removed so floor is fully visible. Room thin dark-teal exterior margin about 32px. Wood plank floor without busy grain.\nLayout B, U-shaped perimeter work area: exactly THREE individual workstation desks on WEST/left wall vertically, and exactly THREE on EAST/right wall vertically. Total SIX. Desks are rotated to face their nearest wall; each shows a broad desktop from above, ONE thin monitor bar next to wall, one keyboard and one empty teal chair on interior side. Approx centers: left x=310, y=330/550/770; right x=1610,y=330/550/770. They must be separated, equally sized, all six visible. Only a plain notebook on each desk, absolutely NO plants on desks.\nAt LOWER CENTER, a compact inviting lounge with a muted teal sofa seen from directly above, ivory cushions, and a simple oatmeal woven rug, approximately x=720..1200 y=620..960. ONE round wooden tea table clearly separated in front of sofa, seen as a perfect circle from above, with one terracotta teapot and two ivory cups, at approximately (960,840). No other tables except the six work desks and this tea table.\nExactly THREE isolated large floor plants, each one separately clickable, individually defined visible round terracotta pots and radial leaves seen from above: upper-left of central floor at approximately (650,350), upper-right of central floor at approximately (1260,350), bottom-right of central lounge at approximately (1300,910). Each pot surrounded by clear wood floor, no other leaves or plants anywhere, no plant groups, no vines, no desk plants, no shelf plants.\nKeep the central upper-middle floor spacious for future walking sprites. Small flat rectangular stair hatch/opening centered at south/bottom edge with visible top-down stair treads, isolated from tea table. Enough clear paths around lounge and every desk. Cozy, tasteful, like an indie farming game room but fully original furniture and map, never copied assets.\nNo humans, no characters, no animals. No writing, no text, no letters, no numbers, no labels, no symbols or captions, no UI, no watermark. Single room, no split image."
+        ]
+      }
+    },
+    {
+      "id": "bg-c",
+      "file": "bg-c.png",
+      "nightFile": "bg-c-night.png",
+      "title": "暖灯小阁 · 暖木茶香",
+      "width": 1920,
+      "height": 1080,
+      "pageBackground": "#382B29",
+      "nightPageBackground": "#171A30",
+      "description": "俯视3/4 RPG视角；六个朝北工位分成2+2+2，书架与木柱分隔，中组后退；斜顶天窗、暖黄灯光、左下泡茶休息区、右下阅读角，下方中央楼梯。",
+      "workstations": [
+        {
+          "id": "c-workstation-1",
+          "x": 248,
+          "y": 456,
+          "chairSeat": {
+            "x": 248,
+            "y": 456
+          },
+          "facing": "north",
+          "bay": 1,
+          "deskRect": {
+            "x": 112,
+            "y": 336,
+            "width": 244,
+            "height": 80
+          },
+          "chairRect": {
+            "x": 200,
+            "y": 404,
+            "width": 96,
+            "height": 116
+          },
+          "clickRect": {
+            "x": 112,
+            "y": 288,
+            "width": 244,
+            "height": 236
+          },
+          "clickPriority": 10,
+          "approachPoint": {
+            "x": 248,
+            "y": 568
+          },
+          "props": "马克杯、台灯、书堆",
+          "sprite": {
+            "file": "../ai-office-chars/sprites/01-lin.png",
+            "animation": "typing_back",
+            "frame": 16,
+            "scale": 4,
+            "topLeft": {
+              "x": 120,
+              "y": 280
+            },
+            "frameSeatAnchorLogical": {
+              "x": 32,
+              "y": 44
+            },
+            "groundAnchor": {
+              "x": 248,
+              "y": 516
+            }
+          }
+        },
+        {
+          "id": "c-workstation-2",
+          "x": 456,
+          "y": 456,
+          "chairSeat": {
+            "x": 456,
+            "y": 456
+          },
+          "facing": "north",
+          "bay": 1,
+          "deskRect": {
+            "x": 364,
+            "y": 336,
+            "width": 208,
+            "height": 80
+          },
+          "chairRect": {
+            "x": 408,
+            "y": 404,
+            "width": 96,
+            "height": 116
+          },
+          "clickRect": {
+            "x": 364,
+            "y": 288,
+            "width": 208,
+            "height": 236
+          },
+          "clickPriority": 10,
+          "approachPoint": {
+            "x": 456,
+            "y": 568
+          },
+          "props": "竖放书本、鼠标",
+          "sprite": {
+            "file": "../ai-office-chars/sprites/02-zhou.png",
+            "animation": "typing_back",
+            "frame": 16,
+            "scale": 4,
+            "topLeft": {
+              "x": 328,
+              "y": 280
+            },
+            "frameSeatAnchorLogical": {
+              "x": 32,
+              "y": 44
+            },
+            "groundAnchor": {
+              "x": 456,
+              "y": 516
+            }
+          }
+        },
+        {
+          "id": "c-workstation-3",
+          "x": 836,
+          "y": 404,
+          "chairSeat": {
+            "x": 836,
+            "y": 404
+          },
+          "facing": "north",
+          "bay": 2,
+          "deskRect": {
+            "x": 720,
+            "y": 292,
+            "width": 232,
+            "height": 80
+          },
+          "chairRect": {
+            "x": 788,
+            "y": 352,
+            "width": 96,
+            "height": 116
+          },
+          "clickRect": {
+            "x": 720,
+            "y": 236,
+            "width": 232,
+            "height": 236
+          },
+          "clickPriority": 10,
+          "approachPoint": {
+            "x": 836,
+            "y": 516
+          },
+          "props": "小盆栽、书堆、马克杯",
+          "sprite": {
+            "file": "../ai-office-chars/sprites/03-yue.png",
+            "animation": "typing_back",
+            "frame": 16,
+            "scale": 4,
+            "topLeft": {
+              "x": 708,
+              "y": 228
+            },
+            "frameSeatAnchorLogical": {
+              "x": 32,
+              "y": 44
+            },
+            "groundAnchor": {
+              "x": 836,
+              "y": 464
+            }
+          }
+        },
+        {
+          "id": "c-workstation-4",
+          "x": 1072,
+          "y": 404,
+          "chairSeat": {
+            "x": 1072,
+            "y": 404
+          },
+          "facing": "north",
+          "bay": 2,
+          "deskRect": {
+            "x": 972,
+            "y": 292,
+            "width": 224,
+            "height": 80
+          },
+          "chairRect": {
+            "x": 1024,
+            "y": 352,
+            "width": 96,
+            "height": 116
+          },
+          "clickRect": {
+            "x": 972,
+            "y": 236,
+            "width": 224,
+            "height": 236
+          },
+          "clickPriority": 10,
+          "approachPoint": {
+            "x": 1072,
+            "y": 516
+          },
+          "props": "小盆栽、笔筒、笔记本",
+          "sprite": {
+            "file": "../ai-office-chars/sprites/04-he.png",
+            "animation": "typing_back",
+            "frame": 16,
+            "scale": 4,
+            "topLeft": {
+              "x": 944,
+              "y": 228
+            },
+            "frameSeatAnchorLogical": {
+              "x": 32,
+              "y": 44
+            },
+            "groundAnchor": {
+              "x": 1072,
+              "y": 464
+            }
+          }
+        },
+        {
+          "id": "c-workstation-5",
+          "x": 1456,
+          "y": 456,
+          "chairSeat": {
+            "x": 1456,
+            "y": 456
+          },
+          "facing": "north",
+          "bay": 3,
+          "deskRect": {
+            "x": 1344,
+            "y": 336,
+            "width": 208,
+            "height": 80
+          },
+          "chairRect": {
+            "x": 1408,
+            "y": 404,
+            "width": 96,
+            "height": 116
+          },
+          "clickRect": {
+            "x": 1344,
+            "y": 288,
+            "width": 208,
+            "height": 236
+          },
+          "clickPriority": 10,
+          "approachPoint": {
+            "x": 1456,
+            "y": 568
+          },
+          "props": "小盆栽、便笺",
+          "sprite": {
+            "file": "../ai-office-chars/sprites/05-tang.png",
+            "animation": "typing_back",
+            "frame": 16,
+            "scale": 4,
+            "topLeft": {
+              "x": 1328,
+              "y": 280
+            },
+            "frameSeatAnchorLogical": {
+              "x": 32,
+              "y": 44
+            },
+            "groundAnchor": {
+              "x": 1456,
+              "y": 516
+            }
+          }
+        },
+        {
+          "id": "c-workstation-6",
+          "x": 1660,
+          "y": 456,
+          "chairSeat": {
+            "x": 1660,
+            "y": 456
+          },
+          "facing": "north",
+          "bay": 3,
+          "deskRect": {
+            "x": 1560,
+            "y": 336,
+            "width": 244,
+            "height": 80
+          },
+          "chairRect": {
+            "x": 1612,
+            "y": 404,
+            "width": 96,
+            "height": 116
+          },
+          "clickRect": {
+            "x": 1560,
+            "y": 288,
+            "width": 244,
+            "height": 236
+          },
+          "clickPriority": 10,
+          "approachPoint": {
+            "x": 1660,
+            "y": 568
+          },
+          "props": "台灯、书堆、马克杯",
+          "sprite": {
+            "file": "../ai-office-chars/sprites/06-bai.png",
+            "animation": "typing_back",
+            "frame": 16,
+            "scale": 4,
+            "topLeft": {
+              "x": 1532,
+              "y": 280
+            },
+            "frameSeatAnchorLogical": {
+              "x": 32,
+              "y": 44
+            },
+            "groundAnchor": {
+              "x": 1660,
+              "y": 516
+            }
+          }
+        }
+      ],
+      "plants": [
+        {
+          "id": "c-plant-1",
+          "name": "左侧红陶盆龟背竹",
+          "kind": "floor",
+          "clickRect": {
+            "x": 0,
+            "y": 432,
+            "width": 196,
+            "height": 240
+          },
+          "wateringPoint": {
+            "x": 76,
+            "y": 620
+          },
+          "approachPoint": {
+            "x": 204,
+            "y": 668
+          },
+          "clickPriority": 30
+        },
+        {
+          "id": "c-plant-2",
+          "name": "右下白盆虎尾兰",
+          "kind": "floor",
+          "clickRect": {
+            "x": 1796,
+            "y": 724,
+            "width": 116,
+            "height": 256
+          },
+          "wateringPoint": {
+            "x": 1860,
+            "y": 928
+          },
+          "approachPoint": {
+            "x": 1736,
+            "y": 1004
+          },
+          "clickPriority": 30
+        },
+        {
+          "id": "c-plant-3",
+          "name": "右下蓝釉盆蕨类",
+          "kind": "floor",
+          "clickRect": {
+            "x": 1184,
+            "y": 780,
+            "width": 192,
+            "height": 208
+          },
+          "wateringPoint": {
+            "x": 1280,
+            "y": 948
+          },
+          "approachPoint": {
+            "x": 1272,
+            "y": 1020
+          },
+          "clickPriority": 30
+        },
+        {
+          "id": "c-plant-4",
+          "name": "楼梯左侧陶盆垂叶",
+          "kind": "floor",
+          "clickRect": {
+            "x": 732,
+            "y": 868,
+            "width": 96,
+            "height": 148
+          },
+          "wateringPoint": {
+            "x": 788,
+            "y": 984
+          },
+          "approachPoint": {
+            "x": 708,
+            "y": 1008
+          },
+          "clickPriority": 30
+        },
+        {
+          "id": "c-plant-5",
+          "name": "楼梯右侧陶盆小灌木",
+          "kind": "floor",
+          "clickRect": {
+            "x": 1112,
+            "y": 864,
+            "width": 96,
+            "height": 152
+          },
+          "wateringPoint": {
+            "x": 1156,
+            "y": 984
+          },
+          "approachPoint": {
+            "x": 1160,
+            "y": 1032
+          },
+          "clickPriority": 30
+        }
+      ],
+      "decorativePlants": [
+        {
+          "id": "c-decorative-plant-1",
+          "name": "左上悬挂吊兰",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 76,
+            "y": 108,
+            "width": 108,
+            "height": 212
+          },
+          "wateringPoint": {
+            "x": 132,
+            "y": 188
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-2",
+          "name": "左墙搁板小陶盆",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 356,
+            "y": 208,
+            "width": 52,
+            "height": 64
+          },
+          "wateringPoint": {
+            "x": 384,
+            "y": 252
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-3",
+          "name": "左分隔书架顶盆栽",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 584,
+            "y": 120,
+            "width": 68,
+            "height": 76
+          },
+          "wateringPoint": {
+            "x": 620,
+            "y": 176
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-4",
+          "name": "左木柱垂叶盆栽",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 652,
+            "y": 108,
+            "width": 96,
+            "height": 220
+          },
+          "wateringPoint": {
+            "x": 696,
+            "y": 176
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-5",
+          "name": "中央墙架垂叶盆栽",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 896,
+            "y": 116,
+            "width": 128,
+            "height": 128
+          },
+          "wateringPoint": {
+            "x": 960,
+            "y": 196
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-6",
+          "name": "右分隔书架顶盆栽",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 1236,
+            "y": 108,
+            "width": 96,
+            "height": 116
+          },
+          "wateringPoint": {
+            "x": 1280,
+            "y": 188
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-7",
+          "name": "右墙搁板小陶盆",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 1512,
+            "y": 228,
+            "width": 60,
+            "height": 56
+          },
+          "wateringPoint": {
+            "x": 1540,
+            "y": 268
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-8",
+          "name": "右上悬挂吊兰",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 1744,
+            "y": 108,
+            "width": 108,
+            "height": 220
+          },
+          "wateringPoint": {
+            "x": 1796,
+            "y": 192
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-9",
+          "name": "一号桌小盆栽",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 296,
+            "y": 300,
+            "width": 48,
+            "height": 64
+          },
+          "wateringPoint": {
+            "x": 324,
+            "y": 352
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-10",
+          "name": "三号桌小盆栽",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 724,
+            "y": 248,
+            "width": 60,
+            "height": 76
+          },
+          "wateringPoint": {
+            "x": 752,
+            "y": 308
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-11",
+          "name": "四号桌小盆栽",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 976,
+            "y": 256,
+            "width": 52,
+            "height": 60
+          },
+          "wateringPoint": {
+            "x": 1000,
+            "y": 304
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-12",
+          "name": "五号桌小盆栽",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 1344,
+            "y": 300,
+            "width": 60,
+            "height": 80
+          },
+          "wateringPoint": {
+            "x": 1376,
+            "y": 360
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-13",
+          "name": "左边柜垂叶盆栽",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 448,
+            "y": 560,
+            "width": 120,
+            "height": 164
+          },
+          "wateringPoint": {
+            "x": 516,
+            "y": 644
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-14",
+          "name": "左边柜开花盆栽",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 596,
+            "y": 560,
+            "width": 64,
+            "height": 92
+          },
+          "wateringPoint": {
+            "x": 628,
+            "y": 636
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-15",
+          "name": "茶桌插花盆栽",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 352,
+            "y": 784,
+            "width": 76,
+            "height": 100
+          },
+          "wateringPoint": {
+            "x": 388,
+            "y": 860
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-16",
+          "name": "阅读边桌白盆小植",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 1408,
+            "y": 692,
+            "width": 64,
+            "height": 84
+          },
+          "wateringPoint": {
+            "x": 1440,
+            "y": 756
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-17",
+          "name": "阅读椅旁陶盆小植",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 1528,
+            "y": 652,
+            "width": 80,
+            "height": 108
+          },
+          "wateringPoint": {
+            "x": 1572,
+            "y": 732
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-18",
+          "name": "右侧书柜顶垂叶盆栽",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 1752,
+            "y": 456,
+            "width": 84,
+            "height": 144
+          },
+          "wateringPoint": {
+            "x": 1792,
+            "y": 508
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        },
+        {
+          "id": "c-decorative-plant-19",
+          "name": "右侧书柜顶白盆绿植",
+          "kind": "shelf-desk-or-hanging",
+          "clickRect": {
+            "x": 1808,
+            "y": 384,
+            "width": 112,
+            "height": 168
+          },
+          "wateringPoint": {
+            "x": 1888,
+            "y": 520
+          },
+          "approachPoint": null,
+          "clickPriority": 40
+        }
+      ],
+      "plantClickPolicy": "五个落地盆栽为主要浇水目标；其余19个可见盆器也提供点击矩形。鼠标命中先按clickPriority降序，再按矩形面积升序；装饰盆栽的子矩形允许位于工位或茶桌矩形内。",
+      "teaTable": {
+        "id": "c-tea-table",
+        "shape": "rectangle",
+        "clickRect": {
+          "x": 228,
+          "y": 836,
+          "width": 272,
+          "height": 140
+        },
+        "teaSpawnPoint": {
+          "x": 328,
+          "y": 888
+        },
+        "approachPoint": {
+          "x": 504,
+          "y": 1008
+        },
+        "clickPriority": 20,
+        "teapotRect": {
+          "x": 280,
+          "y": 828,
+          "width": 100,
+          "height": 88
+        },
+        "cupRects": [
+          {
+            "x": 240,
+            "y": 884,
+            "width": 44,
+            "height": 40
+          },
+          {
+            "x": 412,
+            "y": 856,
+            "width": 56,
+            "height": 48
+          }
+        ]
+      },
+      "sofa": {
+        "id": "c-sofa",
+        "rect": {
+          "x": 108,
+          "y": 668,
+          "width": 448,
+          "height": 212
+        },
+        "seatPoints": [
+          {
+            "x": 244,
+            "y": 772
+          },
+          {
+            "x": 352,
+            "y": 772
+          },
+          {
+            "x": 456,
+            "y": 772
+          }
+        ],
+        "teaSeatPoint": {
+          "x": 352,
+          "y": 772
+        },
+        "facing": "south",
+        "approachPoint": {
+          "x": 664,
+          "y": 784
+        },
+        "sprite": {
+          "file": "../ai-office-chars/sprites/01-lin.png",
+          "animation": "tea",
+          "frame": 20,
+          "scale": 4,
+          "topLeft": {
+            "x": 224,
+            "y": 596
+          },
+          "frameSeatAnchorLogical": {
+            "x": 32,
+            "y": 44
+          },
+          "groundAnchor": {
+            "x": 352,
+            "y": 832
+          }
+        }
+      },
+      "loungeRect": {
+        "x": 40,
+        "y": 636,
+        "width": 680,
+        "height": 384
+      },
+      "stairs": {
+        "id": "c-stairs",
+        "rect": {
+          "x": 824,
+          "y": 804,
+          "width": 288,
+          "height": 244
+        },
+        "openingRect": {
+          "x": 856,
+          "y": 844,
+          "width": 224,
+          "height": 200
+        },
+        "clickRect": {
+          "x": 856,
+          "y": 828,
+          "width": 224,
+          "height": 68
+        },
+        "entryPoint": {
+          "x": 968,
+          "y": 808
+        },
+        "triggerRect": {
+          "x": 872,
+          "y": 844,
+          "width": 192,
+          "height": 52
+        },
+        "direction": "down",
+        "clickPriority": 50
+      },
+      "navigation": {
+        "coordinateBasis": "脚底或椅脚落点，不是人物图像外框。地毯与光斑可以走；障碍矩形是保守的地面占用，不是全部可见轮廓。",
+        "walkableRects": [
+          {
+            "x": 20,
+            "y": 424,
+            "width": 1880,
+            "height": 624
+          }
+        ],
+        "obstacleRects": [
+          {
+            "id": "c-obstacle-left-desks",
+            "rect": {
+              "x": 104,
+              "y": 372,
+              "width": 472,
+              "height": 100
+            }
+          },
+          {
+            "id": "c-obstacle-middle-desks",
+            "rect": {
+              "x": 712,
+              "y": 320,
+              "width": 488,
+              "height": 104
+            }
+          },
+          {
+            "id": "c-obstacle-right-desks",
+            "rect": {
+              "x": 1340,
+              "y": 372,
+              "width": 472,
+              "height": 100
+            }
+          },
+          {
+            "id": "c-obstacle-left-bookcase",
+            "rect": {
+              "x": 584,
+              "y": 392,
+              "width": 84,
+              "height": 52
+            }
+          },
+          {
+            "id": "c-obstacle-right-bookcase-divider",
+            "rect": {
+              "x": 1240,
+              "y": 392,
+              "width": 96,
+              "height": 52
+            }
+          },
+          {
+            "id": "c-obstacle-sofa",
+            "rect": {
+              "x": 112,
+              "y": 744,
+              "width": 444,
+              "height": 136
+            }
+          },
+          {
+            "id": "c-obstacle-tea-table",
+            "rect": {
+              "x": 228,
+              "y": 900,
+              "width": 272,
+              "height": 76
+            }
+          },
+          {
+            "id": "c-obstacle-sideboard",
+            "rect": {
+              "x": 464,
+              "y": 656,
+              "width": 196,
+              "height": 84
+            }
+          },
+          {
+            "id": "c-obstacle-sofa-ottoman",
+            "rect": {
+              "x": 568,
+              "y": 864,
+              "width": 104,
+              "height": 64
+            }
+          },
+          {
+            "id": "c-obstacle-sofa-floor-lamp",
+            "rect": {
+              "x": 48,
+              "y": 792,
+              "width": 100,
+              "height": 80
+            }
+          },
+          {
+            "id": "c-obstacle-monstera-pot",
+            "rect": {
+              "x": 24,
+              "y": 592,
+              "width": 112,
+              "height": 80
+            }
+          },
+          {
+            "id": "c-obstacle-stairs-left-rail",
+            "rect": {
+              "x": 824,
+              "y": 804,
+              "width": 32,
+              "height": 240
+            }
+          },
+          {
+            "id": "c-obstacle-stairs-right-rail",
+            "rect": {
+              "x": 1080,
+              "y": 804,
+              "width": 32,
+              "height": 240
+            }
+          },
+          {
+            "id": "c-obstacle-stairs-recess",
+            "rect": {
+              "x": 856,
+              "y": 896,
+              "width": 224,
+              "height": 152
+            }
+          },
+          {
+            "id": "c-obstacle-stairs-left-pot",
+            "rect": {
+              "x": 752,
+              "y": 944,
+              "width": 72,
+              "height": 72
+            }
+          },
+          {
+            "id": "c-obstacle-stairs-right-pot",
+            "rect": {
+              "x": 1120,
+              "y": 944,
+              "width": 72,
+              "height": 72
+            }
+          },
+          {
+            "id": "c-obstacle-fern-pot",
+            "rect": {
+              "x": 1232,
+              "y": 908,
+              "width": 104,
+              "height": 76
+            }
+          },
+          {
+            "id": "c-obstacle-reading-chair",
+            "rect": {
+              "x": 1544,
+              "y": 796,
+              "width": 200,
+              "height": 112
+            }
+          },
+          {
+            "id": "c-obstacle-reading-side-table",
+            "rect": {
+              "x": 1408,
+              "y": 752,
+              "width": 132,
+              "height": 80
+            }
+          },
+          {
+            "id": "c-obstacle-reading-footstool",
+            "rect": {
+              "x": 1452,
+              "y": 872,
+              "width": 148,
+              "height": 88
+            }
+          },
+          {
+            "id": "c-obstacle-reading-basket",
+            "rect": {
+              "x": 1692,
+              "y": 852,
+              "width": 116,
+              "height": 96
+            }
+          },
+          {
+            "id": "c-obstacle-right-wall-bookcase",
+            "rect": {
+              "x": 1768,
+              "y": 496,
+              "width": 152,
+              "height": 412
+            }
+          },
+          {
+            "id": "c-obstacle-snake-plant-pot",
+            "rect": {
+              "x": 1824,
+              "y": 888,
+              "width": 88,
+              "height": 88
+            }
+          },
+          {
+            "id": "c-workstation-1-chair",
+            "rect": {
+              "x": 200,
+              "y": 428,
+              "width": 96,
+              "height": 92
+            },
+            "disabledWhenOccupying": "c-workstation-1"
+          },
+          {
+            "id": "c-workstation-2-chair",
+            "rect": {
+              "x": 408,
+              "y": 428,
+              "width": 96,
+              "height": 92
+            },
+            "disabledWhenOccupying": "c-workstation-2"
+          },
+          {
+            "id": "c-workstation-3-chair",
+            "rect": {
+              "x": 788,
+              "y": 376,
+              "width": 96,
+              "height": 92
+            },
+            "disabledWhenOccupying": "c-workstation-3"
+          },
+          {
+            "id": "c-workstation-4-chair",
+            "rect": {
+              "x": 1024,
+              "y": 376,
+              "width": 96,
+              "height": 92
+            },
+            "disabledWhenOccupying": "c-workstation-4"
+          },
+          {
+            "id": "c-workstation-5-chair",
+            "rect": {
+              "x": 1408,
+              "y": 428,
+              "width": 96,
+              "height": 92
+            },
+            "disabledWhenOccupying": "c-workstation-5"
+          },
+          {
+            "id": "c-workstation-6-chair",
+            "rect": {
+              "x": 1612,
+              "y": 428,
+              "width": 96,
+              "height": 92
+            },
+            "disabledWhenOccupying": "c-workstation-6"
+          }
+        ],
+        "centralRoute": [
+          {
+            "x": 968,
+            "y": 808
+          },
+          {
+            "x": 968,
+            "y": 704
+          },
+          {
+            "x": 968,
+            "y": 568
+          }
+        ],
+        "footCollisionHalfExtent": {
+          "x": 28,
+          "y": 12
+        },
+        "minimumClearPassageWidth": 112,
+        "zOrderRule": "背景单层；坐姿素材自带椅子及键盘，完整256×256帧按sprite.topLeft放置，不要再次绘制相同椅子。行走遮挡接入需要应用按脚底y排序；本任务只交素材和坐标。"
+      },
+      "spriteCheck": {
+        "file": "bg-c-check.png",
+        "nightCheckFile": ".work/bg-c-night-check.png",
+        "frameLogical": [
+          64,
+          64
+        ],
+        "scale": 4,
+        "filter": "nearest-neighbor",
+        "typingFrames": 6,
+        "teaFrames": 1,
+        "note": "诊断合成使用未经修画的透明原帧。人物坐姿原资产自带椅子/键盘，本图将其对齐背景椅位；沙发喝茶姿势也保留素材中的椅子边缘。最终日夜背景不含人物。"
+      },
+      "generation": {
+        "mode": "built-in image_gen",
+        "dayRounds": 1,
+        "nightRounds": 1,
+        "selectedDayRound": 1,
+        "promptFile": ".work/bg-c-prompts.json",
+        "postprocess": "只做最近邻对齐480×270逻辑网格、共用160色色板量化及整数4倍导出；没有代码绘制或修改家具。"
+      },
+      "validation": {
+        "workstationCount": 6,
+        "baySizes": [
+          2,
+          2,
+          2
+        ],
+        "primaryFloorPlantCount": 5,
+        "decorativePottedPlantCount": 19,
+        "teaTableCount": 1,
+        "perspective": "3/4 elevated orthographic RPG",
+        "visualReview": true,
+        "spriteScaleAndOcclusionReviewed": true,
+        "dayNightAlignmentReport": ".work/bg-c-alignment.json",
+        "browserReview": "本地file URL被浏览器安全策略拦截；不改变浏览器权限，不以其他入口绕过。",
+        "navigationReview": "坐标与静态路径检查，不代表已在产品内完成寻路验收。"
+      }
+    }
+  ],
+  "export": {
+    "method": "nearest-neighbor format normalization only: AI-generated image -> 480x270 logical canvas -> exact integer 4x -> 1920x1080 PNG",
+    "sceneDrawing": "All architecture, furniture, foliage, textures and lighting were created with image_gen. No procedural pixel drawing, no code-built furniture and no reference-asset collage.",
+    "validation": {
+      "dimensions": "both 1920x1080",
+      "pixelGrid": "all 129600 logical cells per image verified as uniform opaque 4x4 blocks",
+      "clickRectangles": "all in bounds, aligned to the 4px grid, and pairwise non-overlapping",
+      "visualReview": "final PNGs inspected; individual plants, six desks and the single tea table matched to JSON",
+      "browserClickTest": "not run: browser security policy blocked the local file preview"
+    },
+    "pixelGridOrigin": {
+      "x": 0,
+      "y": 0
+    },
+    "note": "Final PNGs contain no interaction overlays or labels. Click rectangles exist only in this JSON."
+  },
+  "research": [
+    {
+      "title": "Modern Interiors - RPG Tileset [16X16] — LimeZu",
+      "url": "https://limezu.itch.io/moderninteriors",
+      "use": "研究模块化家具、统一尺寸与墙边布置；未复用素材。"
+    },
+    {
+      "title": "Fantasyville cozy house interiors — JPKG",
+      "url": "https://aku-jpkg.itch.io/fantasyville-cozy-interiors",
+      "use": "研究地毯分区、清晰家具轮廓和通道留白；未复用素材。"
+    },
+    {
+      "title": "Consistency — Saint11",
+      "url": "https://saint11.org/blog/consistency/",
+      "use": "统一逻辑分辨率、整数倍最近邻缩放与颜色风格。"
+    },
+    {
+      "title": "Endesga 32 Palette — Lospec",
+      "url": "https://lospec.com/palette-list/endesga-32",
+      "use": "研究木色、绿叶与冷暖色阶的组织方式；不是强制套用该色板。"
+    }
+  ]
+}

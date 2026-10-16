@@ -1,10 +1,284 @@
 {
-  "coordinateSpace": {"width": 480, "height": 270},
-  "background": "attic-bg-2.png",
+  "coordinateSpace": {
+    "width": 480,
+    "height": 270
+  },
+  "background": "bg-c.png",
   "plants": [
-    {"id":"plant-left", "name":"左侧绿植", "x":34, "y":78, "w":23, "h":31},
-    {"id":"plant-center", "name":"中央绿植", "x":246, "y":44, "w":32, "h":48},
-    {"id":"plant-right", "name":"右下绿植", "x":443, "y":182, "w":25, "h":48}
+    {
+      "id": "c-plant-1",
+      "name": "左侧红陶盆龟背竹",
+      "x": 0.0,
+      "y": 108.0,
+      "w": 49.0,
+      "h": 60.0,
+      "effectX": 19.0,
+      "effectY": 155.0,
+      "priority": 30
+    },
+    {
+      "id": "c-plant-2",
+      "name": "右下白盆虎尾兰",
+      "x": 449.0,
+      "y": 181.0,
+      "w": 29.0,
+      "h": 64.0,
+      "effectX": 465.0,
+      "effectY": 232.0,
+      "priority": 30
+    },
+    {
+      "id": "c-plant-3",
+      "name": "右下蓝釉盆蕨类",
+      "x": 296.0,
+      "y": 195.0,
+      "w": 48.0,
+      "h": 52.0,
+      "effectX": 320.0,
+      "effectY": 237.0,
+      "priority": 30
+    },
+    {
+      "id": "c-plant-4",
+      "name": "楼梯左侧陶盆垂叶",
+      "x": 183.0,
+      "y": 217.0,
+      "w": 24.0,
+      "h": 37.0,
+      "effectX": 197.0,
+      "effectY": 246.0,
+      "priority": 30
+    },
+    {
+      "id": "c-plant-5",
+      "name": "楼梯右侧陶盆小灌木",
+      "x": 278.0,
+      "y": 216.0,
+      "w": 24.0,
+      "h": 38.0,
+      "effectX": 289.0,
+      "effectY": 246.0,
+      "priority": 30
+    },
+    {
+      "id": "c-decorative-plant-1",
+      "name": "左上悬挂吊兰",
+      "x": 19.0,
+      "y": 27.0,
+      "w": 27.0,
+      "h": 53.0,
+      "effectX": 33.0,
+      "effectY": 47.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-2",
+      "name": "左墙搁板小陶盆",
+      "x": 89.0,
+      "y": 52.0,
+      "w": 13.0,
+      "h": 16.0,
+      "effectX": 96.0,
+      "effectY": 63.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-3",
+      "name": "左分隔书架顶盆栽",
+      "x": 146.0,
+      "y": 30.0,
+      "w": 17.0,
+      "h": 19.0,
+      "effectX": 155.0,
+      "effectY": 44.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-4",
+      "name": "左木柱垂叶盆栽",
+      "x": 163.0,
+      "y": 27.0,
+      "w": 24.0,
+      "h": 55.0,
+      "effectX": 174.0,
+      "effectY": 44.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-5",
+      "name": "中央墙架垂叶盆栽",
+      "x": 224.0,
+      "y": 29.0,
+      "w": 32.0,
+      "h": 32.0,
+      "effectX": 240.0,
+      "effectY": 49.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-6",
+      "name": "右分隔书架顶盆栽",
+      "x": 309.0,
+      "y": 27.0,
+      "w": 24.0,
+      "h": 29.0,
+      "effectX": 320.0,
+      "effectY": 47.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-7",
+      "name": "右墙搁板小陶盆",
+      "x": 378.0,
+      "y": 57.0,
+      "w": 15.0,
+      "h": 14.0,
+      "effectX": 385.0,
+      "effectY": 67.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-8",
+      "name": "右上悬挂吊兰",
+      "x": 436.0,
+      "y": 27.0,
+      "w": 27.0,
+      "h": 55.0,
+      "effectX": 449.0,
+      "effectY": 48.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-9",
+      "name": "一号桌小盆栽",
+      "x": 74.0,
+      "y": 75.0,
+      "w": 12.0,
+      "h": 16.0,
+      "effectX": 81.0,
+      "effectY": 88.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-10",
+      "name": "三号桌小盆栽",
+      "x": 181.0,
+      "y": 62.0,
+      "w": 15.0,
+      "h": 19.0,
+      "effectX": 188.0,
+      "effectY": 77.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-11",
+      "name": "四号桌小盆栽",
+      "x": 244.0,
+      "y": 64.0,
+      "w": 13.0,
+      "h": 15.0,
+      "effectX": 250.0,
+      "effectY": 76.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-12",
+      "name": "五号桌小盆栽",
+      "x": 336.0,
+      "y": 75.0,
+      "w": 15.0,
+      "h": 20.0,
+      "effectX": 344.0,
+      "effectY": 90.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-13",
+      "name": "左边柜垂叶盆栽",
+      "x": 112.0,
+      "y": 140.0,
+      "w": 30.0,
+      "h": 41.0,
+      "effectX": 129.0,
+      "effectY": 161.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-14",
+      "name": "左边柜开花盆栽",
+      "x": 149.0,
+      "y": 140.0,
+      "w": 16.0,
+      "h": 23.0,
+      "effectX": 157.0,
+      "effectY": 159.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-15",
+      "name": "茶桌插花盆栽",
+      "x": 88.0,
+      "y": 196.0,
+      "w": 19.0,
+      "h": 25.0,
+      "effectX": 97.0,
+      "effectY": 215.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-16",
+      "name": "阅读边桌白盆小植",
+      "x": 352.0,
+      "y": 173.0,
+      "w": 16.0,
+      "h": 21.0,
+      "effectX": 360.0,
+      "effectY": 189.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-17",
+      "name": "阅读椅旁陶盆小植",
+      "x": 382.0,
+      "y": 163.0,
+      "w": 20.0,
+      "h": 27.0,
+      "effectX": 393.0,
+      "effectY": 183.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-18",
+      "name": "右侧书柜顶垂叶盆栽",
+      "x": 438.0,
+      "y": 114.0,
+      "w": 21.0,
+      "h": 36.0,
+      "effectX": 448.0,
+      "effectY": 127.0,
+      "priority": 40
+    },
+    {
+      "id": "c-decorative-plant-19",
+      "name": "右侧书柜顶白盆绿植",
+      "x": 452.0,
+      "y": 96.0,
+      "w": 28.0,
+      "h": 42.0,
+      "effectX": 472.0,
+      "effectY": 130.0,
+      "priority": 40
+    }
   ],
-  "teaTable": {"id":"tea-table", "name":"茶桌", "x":54, "y":210, "w":31, "h":18, "effectX":68, "effectY":214}
+  "teaTable": {
+    "id": "c-tea-table",
+    "name": "茶桌",
+    "x": 57.0,
+    "y": 209.0,
+    "w": 68.0,
+    "h": 35.0,
+    "effectX": 82.0,
+    "effectY": 222.0,
+    "priority": 20
+  }
 }

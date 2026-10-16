@@ -5,16 +5,16 @@
   const DAY = ['sunny', 'cloudy', 'rain', 'snow'];
   const NAMES = { sunny: '晴天', cloudy: '阴天', rain: '雨天', snow: '雪天', night: '夜晚' };
   const WIDTH = 480, HEIGHT = 270;
-  // Glass interiors only, measured on attic-bg-2.png. Leave frames and mullions intact.
+  // Glass interiors on bg-c.png / 4. Frames and plants stay untouched.
   const PANES = [
-    [[102,23],[125,23],[122,35],[98,35]],
-    [[127,23],[150,23],[147,35],[124,35]],
-    [[98,37],[121,37],[119,47],[95,47]],
-    [[123,37],[146,37],[143,47],[121,47]],
-    [[330,23],[353,23],[356,35],[333,35]],
-    [[355,23],[378,23],[381,35],[358,35]],
-    [[334,37],[356,37],[359,47],[337,47]],
-    [[359,37],[381,37],[384,47],[362,47]],
+    [[97,9],[119,9],[115,20],[94,20]],
+    [[123,9],[141,9],[138,20],[119,20]],
+    [[93,24],[115,24],[112,36],[88,36]],
+    [[119,24],[138,24],[134,36],[115,36]],
+    [[340,9],[359,9],[362,20],[343,20]],
+    [[363,9],[381,9],[385,20],[366,20]],
+    [[345,24],[364,24],[368,36],[349,36]],
+    [[368,24],[386,24],[391,36],[372,36]],
   ];
   function weatherAt(timestamp) {
     const local = new Date(timestamp + 8 * HOUR), hour = local.getUTCHours();
@@ -34,15 +34,17 @@
     const canvas = document.createElement('canvas'); canvas.width = WIDTH; canvas.height = HEIGHT;
     return canvas;
   };
-  function create(source, now = Date.now()) {
-    const original = source.getContext('2d').getImageData(0, 0, WIDTH, HEIGHT);
+  function create(source, now = Date.now(), nightSource) {
+    const day=surface(),dc=day.getContext('2d');dc.imageSmoothingEnabled=false;
+    dc.drawImage(source,0,0,WIDTH,HEIGHT);
+    const original = dc.getImageData(0, 0, WIDTH, HEIGHT);
     const mask = surface(), maskContext = mask.getContext('2d');
     const pixels = maskContext.createImageData(WIDTH, HEIGHT);
-    for (let y = 23; y < 47; y++) for (let x = 94; x < 385; x++) {
+    for (let y = 8; y < 37; y++) for (let x = 87; x < 392; x++) {
       if (PANES.some(p => inside(x + .5, y + .5, p))) pixels.data[(y * WIDTH + x) * 4 + 3] = 255;
     }
     maskContext.putImageData(pixels, 0, 0);
-    const scenes = { sunny: source };
+    const scenes = { sunny: day };
     const palettes = {
       cloudy: { factor: [.72,.78,.85], tint: [133,153,169], mix: .10, sky: '#9aabb6', cloud: '#bac5c9', tree: '#5f7b77' },
       rain: { factor: [.53,.65,.77], tint: [77,105,128], mix: .10, sky: '#506b85', cloud: '#718798', tree: '#405d60' },
@@ -51,6 +53,9 @@
     };
     for (const [kind, p] of Object.entries(palettes)) {
       const layer = surface(), c = layer.getContext('2d'), data = c.createImageData(WIDTH, HEIGHT);
+      if(kind==='night'&&nightSource) {
+        c.imageSmoothingEnabled=false;c.drawImage(nightSource,0,0,WIDTH,HEIGHT);scenes.night=layer;continue;
+      }
       for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) {
         const i = (y * WIDTH + x) * 4;
         const glow = kind === 'night' ? Math.max(
@@ -72,16 +77,16 @@
         c.globalAlpha = 1;
       }
       const sky = surface(), s = sky.getContext('2d');
-      s.fillStyle = p.sky; s.fillRect(90,22,300,28);
-      for (const origin of [94,328]) {
+      s.fillStyle = p.sky; s.fillRect(87,8,305,30);
+      for (const origin of [88,335]) {
         s.fillStyle = p.cloud;
         for (let j = 0; j < 3; j++) {
-          const x = origin + 5 + j * 18, y = 26 + j % 2 * 4;
+          const x = origin + 5 + j * 18, y = 13 + j % 2 * 4;
           s.fillRect(x,y,13,3); s.fillRect(x+3,y-2,7,2);
         }
         s.fillStyle = p.tree;
         for (let j = 0; j < 14; j++) {
-          const x = origin + j*4, y = 42 + (j*7 % 5);
+          const x = origin + j*4, y = 30 + (j*7 % 5);
           s.fillRect(x,y,4,8); s.fillRect(x+1,y-2,2,2);
           if (kind === 'snow') { s.fillStyle = '#e4eff1'; s.fillRect(x,y,4,1); s.fillStyle = p.tree; }
         }
@@ -125,9 +130,9 @@
       for (const kind of ['rain','snow']) {
         if (!blend[kind]) continue;
         pc.globalAlpha = blend[kind]; pc.fillStyle = kind === 'rain' ? '#bddae7' : '#f4fafb';
-        for (const origin of [94,328]) for (let i = 0; i < (kind === 'rain' ? 35 : 23); i++) {
+        for (const origin of [88,335]) for (let i = 0; i < (kind === 'rain' ? 35 : 23); i++) {
           const drop = drops[i], speed = kind === 'rain' ? 27 + drop.speed*13 : 4 + drop.speed*5;
-          const y = 19 + ((drop.y + time*speed)%34);
+          const y = 5 + ((drop.y + time*speed)%34);
           const x = origin + ((drop.x - (kind === 'rain' ? time*8 : Math.floor(time*.8+i%3)*2))%62+62)%62;
           const px = Math.floor(x), py = Math.floor(y);
           pc.fillRect(px,py,1,kind === 'rain' ? 3 : 1);
@@ -138,7 +143,9 @@
       pc.globalAlpha = 1; pc.globalCompositeOperation = 'destination-in'; pc.drawImage(mask,0,0);
       pc.globalCompositeOperation = 'source-over'; c.drawImage(particles,0,0);
     }
-    return Object.freeze({ draw, update, snapshot: () => ({ ...current, name: NAMES[current.kind],
+    return Object.freeze({ draw, update, dispose:()=>{
+      for(const layer of [...Object.values(scenes),mask,particles]){layer.width=0;layer.height=0;}
+    }, snapshot: () => ({ ...current, name: NAMES[current.kind],
       transitionMs: TRANSITION, weights: weights(Date.now()), panes: PANES.map(p=>p.map(v=>[...v])) }) });
   }
   globalThis.AtticWeather = Object.freeze({ create, weatherAt });

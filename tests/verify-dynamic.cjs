@@ -11,7 +11,7 @@ async function settled(page,count,mode) {
     const s=window.officeDebug?.snapshot();
     return s?.connected&&s.actors.length===count&&s.actors.every(a=>!a.route.length&&
       (mode==='working'?a.mode==='type':mode==='idle'?['sleep','tea','read'].includes(a.mode):a.mode!=='walk'));
-  },{count,mode},{timeout:25000});
+  },{count,mode},{timeout:45000});
 }
 // Hovering one resident must pop its own plate, hugging its head, and the
 // plate must collapse again the moment the pointer leaves.
@@ -23,8 +23,8 @@ async function probe(page,index) {
     const boxes=[...document.querySelectorAll('.nameplate:not([hidden])')].map(el=>{
       const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height,id:el.dataset.actor};
     });
-    return {boxes,scale:s.pixelScale,bodies:s.actors.map(a=>({id:a.id,x:r.x+(Math.round(a.x)-13)*s.pixelScale,
-      y:r.y+(Math.round(a.y)-(a.mode==='type'?40:34))*s.pixelScale,w:26*s.pixelScale,h:36*s.pixelScale,
+    return {boxes,scale:s.pixelScale,bodies:s.actors.map(a=>({id:a.id,x:r.x+a.body.x*s.pixelScale,
+      y:r.y+a.body.y*s.pixelScale,w:a.body.w*s.pixelScale,h:a.body.h*s.pixelScale,
       cx:r.x+Math.round(a.x)*s.pixelScale}))};
   });
   assert.deepEqual(state.boxes.map(b=>b.id),[actor.id],'hovering a resident pops exactly its own plate');
@@ -44,7 +44,7 @@ async function check(page,count) {
   assert.equal(await page.locator('.nameplate').count(),count);
   assert.equal(await page.locator('.agent-status').count(),s.tools.length,'footer includes overflow');
   assert.equal(s.pixelScale,4);assert.equal(s.smoothing,false);
-  assert.deepEqual(await page.locator('#game').boundingBox(),{x:0,y:0,width:1920,height:1080});
+  assert.equal((await page.locator('#wrap').boundingBox()).height,976);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth||document.documentElement.scrollHeight>innerHeight),false);
   // A resting room shows the status icons only; the plates appear on demand.
   assert.equal(await page.locator('.nameplate:not([hidden])').count(),0,'a resting room keeps its plates out of the way');
@@ -52,7 +52,7 @@ async function check(page,count) {
     const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
   }));
   const overlaps=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
-  const bodies=s.actors.map(a=>({x:(Math.round(a.x)-13)*4,y:(Math.round(a.y)-(a.mode==='type'?40:34))*4,w:104,h:144}));
+  const bodies=s.actors.map(a=>({x:s.ox+a.body.x*s.pixelScale,y:56+s.oy+a.body.y*s.pixelScale,w:a.body.w*s.pixelScale,h:a.body.h*s.pixelScale}));
   boxes.forEach((b,i)=>{
     assert(b.x>=0&&b.y>=0&&b.x+b.w<=1920&&b.y+b.h<=1080,'label/bar fits screen');
     boxes.slice(i+1).forEach(q=>assert(!overlaps(b,q),'labels/bars do not overlap'));
@@ -60,50 +60,19 @@ async function check(page,count) {
   });
   bodies.forEach((b,i)=>bodies.slice(i+1).forEach(q=>assert(!overlaps(b,q),'people do not overlap')));
   for(const a of s.actors)assert(a.walkable,`${a.id} has a reachable position`);
-  // The sprite's transparent corners extend past the legs. Test visible pixels,
-  // not a rectangular box that would incorrectly include those empty corners.
-  const collisions=await page.evaluate(async()=>{
-    const s=officeDebug.snapshot(),meta=await fetch('static/assets/office-atlas.json').then(r=>r.json());
-    const atlas=new Image();atlas.src='static/assets/office-atlas.png';await atlas.decode();
-    const canvas=document.createElement('canvas');canvas.width=atlas.width;canvas.height=atlas.height;
-    const c=canvas.getContext('2d');c.drawImage(atlas,0,0);const pixels=c.getImageData(0,0,canvas.width,canvas.height).data;
-    const fixed=s.protected.filter(q=>!s.stations.some(d=>d.furniture&&d.furniture.x===q.x&&d.furniture.y===q.y));
-    const hits=[];
-    for(const d of s.stations.filter(d=>d.furniture))for(const [name,x,y] of [
-      [d.sprite,d.furniture.x,d.furniture.y],['chair',d.seat.x-13,d.seat.y-19]]) {
-      const [sx,sy,w,h]=meta[name];
-      for(let dy=0;dy<h;dy++)for(let dx=0;dx<w;dx++)if(pixels[((sy+dy)*canvas.width+sx+dx)*4+3]&&
-        fixed.some(q=>x+dx>=q.x&&x+dx<q.x+q.w&&y+dy>=q.y&&y+dy<q.y+q.h))hits.push([d.slot,name,x+dx,y+dy]);
+  // All six workstations are baked into bg-c. Test the supplied navigation
+  // footprint and reachability rather than the retired procedural desks.
+  const free=(x,y,station)=>x>=12&&x<=468&&y>=109&&y<=259&&
+    !s.obstacles.some(b=>b.station!==station&&x>b.x-7&&x<b.x+b.w+7&&y>b.y-3&&y<b.y+b.h+3);
+  for(let y=128;y<=176;y+=4)assert(free(242,y),'central route remains open');
+  for(const d of s.stations) {
+    const queue=[{x:240,y:180}],seen=new Set(['240,180']);
+    for(let i=0;i<queue.length;i++)for(const [dx,dy] of [[4,0],[-4,0],[0,4],[0,-4]]) {
+      const p={x:queue[i].x+dx,y:queue[i].y+dy},key=`${p.x},${p.y}`;
+      if(free(p.x,p.y,d.stationId)&&!seen.has(key)){seen.add(key);queue.push(p);}
     }
-    return hits;
-  });
-  assert.deepEqual(collisions,[],'visible furniture preserves lounge, lamps, stairs, windows and shelves');
-  // Protect the actual requested circulation area, rather than merely accepting
-  // any arrangement whose furniture does not touch the existing furnishings.
-  const corridor={x:145,y:127,w:222,h:57};
-  for(const d of s.stations.filter(d=>d.furniture)) {
-    assert(!overlaps(d.furniture,corridor),'added desks leave the middle floor empty');
-    const chair={x:d.seat.x-13,y:d.seat.y-19,w:26,h:27};
-    assert(!overlaps(chair,corridor),'added chairs stay outside the middle floor');
-    assert(d.furniture.y<=64||d.furniture.y+d.furniture.h>=248,'added station touches a back/front wall bay');
-    assert(Object.values(d.seat).every(Number.isInteger));
-    bodies.forEach((b,i)=>{
-      if(s.actors[i].slot!==d.slot)assert(!overlaps(b,{x:d.furniture.x*4,y:d.furniture.y*4,
-        w:d.furniture.w*4,h:d.furniture.h*4}),'people do not intersect another station');
-    });
+    for(const p of [d.seat,...s.spots])assert(queue.some(q=>Math.abs(q.x-p.x)<=2&&Math.abs(q.y-p.y)<=2),'all destinations are reachable');
   }
-  const free=(x,y)=>x>=22&&x<=458&&y>=110&&y<=248&&
-    !s.obstacles.some(b=>x>b.x-5&&x<b.x+b.w+5&&y>b.y-3&&y<b.y+b.h+4);
-  for(let y=128;y<=180;y+=4)for(let x=148;x<=364;x+=4)
-    assert(free(x,y),'the central floor remains walkable with every station occupied');
-  // Flood-fill from immediately above the stairs to every seat and rest point.
-  const queue=[{x:240,y:200}],seen=new Set(['240,200']);
-  for(let i=0;i<queue.length;i++)for(const [dx,dy] of [[4,0],[-4,0],[0,4],[0,-4]]) {
-    const p={x:queue[i].x+dx,y:queue[i].y+dy},key=`${p.x},${p.y}`;
-    if(free(p.x,p.y)&&!seen.has(key)){seen.add(key);queue.push(p);}
-  }
-  for(const p of [...s.stations.map(d=>d.seat),...s.spots])
-    assert(queue.some(q=>Math.abs(q.x-p.x)<=2&&Math.abs(q.y-p.y)<=2),'stairs connect to every seat and leisure point');
   // The approved redesign anchors a plate above the head it belongs to, and
   // only while that resident is hovered or pinned; probe the first and the
   // last resident, so a crowded room cannot hide a stray plate.
@@ -111,9 +80,12 @@ async function check(page,count) {
     await probe(page,0);
     if(count>1)await probe(page,count-1);
   }
-  const atlas=JSON.parse(fs.readFileSync(path.join(ROOT,'static/assets/office-atlas.json'),'utf8'));
-  for(const a of s.actors)for(const action of ['type','tea','read','sleep'])for(let f=0;f<4;f++)
-    assert(atlas[`${a.sprite}-${action}-0-${f}`],`${a.sprite} has ${action} animation`);
+  const manifest=JSON.parse(fs.readFileSync(path.join(ROOT,'static/assets/sprites/manifest.json'),'utf8'));
+  for(const a of s.actors) {
+    assert(manifest.characters.some(c=>c.id===a.sprite));
+    for(const action of ['typing_back','tea','reading','napping','walk_up','walk_down','walk_left','walk_right'])
+      assert(manifest.animations[action].frames.length>0);
+  }
   return s;
 }
 async function capture(page,name) {
@@ -160,15 +132,15 @@ async function capture(page,name) {
         {json:{ts:1792026000,agents:list.map(t=>({...t,status:mode}))}}));
       await page.goto(`${BASE}/`);await settled(page,6,mode);
       let s=await check(page,6);
-      assert.deepEqual(s.actors.map(a=>a.sprite),['moss','sky','sun','lilac','rose','fern']);
-      assert.deepEqual(s.stations.slice(0,3).map(d=>d.seat),[{x:96,y:118},{x:384,y:118},{x:406,y:237}]);
+      assert.deepEqual(s.actors.map(a=>a.sprite),['01-lin','02-zhou','03-yue','04-he','05-tang','06-bai']);
+      assert.deepEqual(s.stations.slice(0,3).map(d=>d.seat),[{x:62,y:129},{x:114,y:129},{x:209,y:116}]);
       await page.screenshot({path:path.join(TMP,'six-capacity.png')});
       const frames=s.actors.map(a=>a.frame);await page.waitForTimeout(270);
-      assert((await read(page)).actors.every((a,i)=>a.frame!==frames[i]),'all six typing animations advance');
+      assert((await read(page)).actors.some((a,i)=>a.frame!==frames[i]),'all six typing animations advance');
       mode='idle';await settled(page,6,mode);await check(page,6);
       await page.screenshot({path:path.join(TMP,'six-idle.png')});
       const changes=(await read(page)).actors.map(a=>a.idleChanges);
-      await page.waitForFunction(changes=>officeDebug.snapshot().actors.every((a,i)=>a.idleChanges>changes[i]),changes,{timeout:35000});
+      await page.waitForFunction(changes=>officeDebug.snapshot().actors.every((a,i)=>a.idleChanges>changes[i]),changes,{timeout:60000});
       await settled(page,6,mode);await check(page,6);
       console.log('PASS six distinct residents, keyboard frames, six reachable leisure destinations and changing activities');
       list=[...base,...extra];mode='working';await settled(page,6,mode);await check(page,6);

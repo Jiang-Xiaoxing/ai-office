@@ -9,7 +9,7 @@
   --wood:#624939;
   --edge:#332b29;
   --rim:#ad8558;
-  --wall:#454342;
+  --wall:#382B29;
   color:var(--ink);
   background:var(--wall);
 }
@@ -25,6 +25,9 @@ html,body {
 body {
   position:relative;
   height:100dvh;
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:56px minmax(0,1fr) auto;
 }
 body[data-time='night'] {
   color-scheme:dark;
@@ -33,10 +36,9 @@ body[data-time='night'] {
   --wood:#443b37;
   --edge:#25282e;
   --rim:#8c7253;
-  --wall:#303238;
 }
 #bar,#footer {
-  position:absolute;
+  position:relative;
   z-index:2;
   display:flex;
   align-items:center;
@@ -49,12 +51,10 @@ body[data-time='night'] {
   background-image:repeating-linear-gradient(0deg,transparent 0 14px,#e7bd7c08 14px 16px);
 }
 #bar {
-  inset:0 0 auto;
   height:56px;
   justify-content:space-between;
 }
 #footer {
-  inset:auto 0 0;
   height:48px;
 }
 .identity,.connection {
@@ -139,12 +139,12 @@ h1 {
   color:#edcfaa;
 }
 #wrap {
-  position:absolute;
-  inset:0;
+  position:relative;
   overflow:hidden;
   min-height:0;
   background:var(--wall);
-  background-image:repeating-linear-gradient(0deg,transparent 0 28px,#1c20231a 28px 32px);
+  /* Clip decorative image edges here; neither HUD bar overlays the room. */
+  isolation:isolate;
 }
 #game {
   display:block;
@@ -260,8 +260,10 @@ h1 {
   min-width:0;
   max-width:100%;
   overflow-x:auto;
-  scrollbar-width:thin;
-  scrollbar-color:var(--rim) var(--wood);
+  scrollbar-width:none;
+}
+#roster::-webkit-scrollbar {
+  display:none;
 }
 .agent-status {
   display:inline-flex;

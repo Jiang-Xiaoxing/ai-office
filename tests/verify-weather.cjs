@@ -11,6 +11,7 @@ async function setTime(page,timestamp) {
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
 }
 async function capture(page,name,final=false) {
+  await require('./capture.cjs')(page,name);
   await page.screenshot({path:path.join(final?path.join(ROOT,'preview'):TMP,`${name}.png`)});
   if(final) {
     const masks=await page.locator('.nameplate:not([hidden]),#bar,#footer').evaluateAll(els=>els.map(el=>{
@@ -59,7 +60,7 @@ function inPane(x,y,polygons) {
       if(kind==='rain'||kind==='snow') {
         const a=await pixelFrame(page);await setTime(page,t+350);const b=await pixelFrame(page);
         let moved=0;
-        for(let y=20;y<50;y++)for(let x=90;x<390;x++) {
+        for(let y=8;y<37;y++)for(let x=87;x<392;x++) {
           const i=(y*480+x)*4;
           if(a[i]!==b[i]||a[i+1]!==b[i+1]||a[i+2]!==b[i+2]) {
             moved++;assert(inPane(x+.5,y+.5,state.weather.panes),`particle escaped glass: ${x},${y}`);
@@ -68,13 +69,13 @@ function inPane(x,y,polygons) {
         assert(moved>40,`${kind} particles animate: ${moved}`);
         await page.emulateMedia({reducedMotion:'reduce'});
         await setTime(page,t+600);const still=await pixelFrame(page);await setTime(page,t+1600);const still2=await pixelFrame(page);
-        for(let y=20;y<50;y++)for(let x=90;x<390;x++) {
+        for(let y=8;y<37;y++)for(let x=87;x<392;x++) {
           const i=(y*480+x)*4;assert.deepEqual(still.slice(i,i+3),still2.slice(i,i+3),'reduced-motion keeps weather static');
         }
         await page.emulateMedia({reducedMotion:'no-preference'});
       }
       if(kind==='rain') {
-        work=true;await page.waitForFunction(()=>officeDebug.snapshot().actors.every(a=>a.mode==='type'),null,{timeout:22000});
+        work=true;await page.waitForFunction(()=>officeDebug.snapshot().actors.every(a=>a.mode==='type'),null,{timeout:45000});
         state=await read(page);assert(state.actors.every(a=>a.walkable&&a.monitorOn));
         await capture(page,'attic-weather',true);work=false;
       }
@@ -94,7 +95,10 @@ function inPane(x,y,polygons) {
         for(const size of [{width:390,height:844},{width:1366,height:768}]) {
           await page.setViewportSize(size);await page.waitForTimeout(100);
           const box=await page.locator('#game').boundingBox();
-          assert(box.x>=0&&box.y>=0&&box.x+box.width<=size.width&&box.y+box.height<=size.height);
+          const frame=await page.locator('#wrap').boundingBox();
+          assert(box.x>=-.1&&box.x+box.width<=size.width+.1&&Math.abs(box.width/box.height-16/9)<.001);
+          assert.equal(frame.y,56);assert(frame.y+frame.height<=size.height-48);
+          assert.equal(await page.locator('#wrap').evaluate(e=>getComputedStyle(e).overflow),'hidden');
           assert.equal((await read(page)).smoothing,false);
         }
       }

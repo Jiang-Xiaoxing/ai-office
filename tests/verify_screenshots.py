@@ -14,34 +14,33 @@ except ModuleNotFoundError:
         raise
     raise SystemExit(subprocess.call([str(art_python), str(Path(__file__).resolve()), *sys.argv[1:]]))
 root = Path(__file__).resolve().parents[1]
-# The default list is exactly what a normal `node tests/run-all.cjs` records:
-# verify-office writes attic-idle/attic-work, verify-weather attic-weather.
-# attic-six.png only comes from the documented `verify-dynamic.cjs --live6`
-# run (temporary six-tool config plus a real backend restart); check it by
-# passing it explicitly after that run, e.g.
-# python tests/verify_screenshots.py attic-six.png
-for name in sys.argv[1:] or ('attic-idle.png', 'attic-work.png', 'attic-weather.png'):
-    im = Image.open(root / 'preview' / name).convert('RGB')
-    assert im.size == (1920, 1080), im.size
-    # Run the matching browser capture first to record each image's HTML overlay bounds.
-    masks_path = root / '.browser-tmp' / f'{Path(name).stem}-masks.json'
-    assert masks_path.is_file(), f'{name}: run its browser capture first, {masks_path.name} is missing'
-    masks = json.loads(masks_path.read_text())
-    # The room fills 1920x1080 at 4x, starting at (0, 0). HTML text is separate.
-    # Every unobscured 4x4 block must be one source pixel, without smoothing.
-    pixels = im.load()
-    bad = checked = 0
-    for y in range(0, 1080, 4):
-        for x in range(0, 1920, 4):
-            # The HTML UI has a 2px focus rim and a stepped pointer/shadow
-            # extending 8px below. Match those extents without hiding extra art.
-            if any(x < b['x']+b['w']+2 and x+4 > b['x']-2 and
-                   y < b['y']+b['h']+8 and y+4 > b['y']-2 for b in masks):
+# Responsive proportional scaling fills the area between the bars. Verify
+# nearest-neighbour colours against the native canvas at its actual projection.
+for name in sys.argv[1:] or ('attic-idle.png','attic-work.png','attic-weather.png'):
+    im = Image.open(root/'preview'/name).convert('RGB')
+    assert im.size in ((1920,1080),(1024,600)), im.size
+    stem=Path(name).stem
+    tmp=root/'.browser-tmp'
+    masks=json.loads((tmp/f'{stem}-masks.json').read_text())
+    box=json.loads((tmp/f'{stem}-projection.json').read_text())
+    masks.extend(box.get('ui',[]))
+    native=Image.open(tmp/f'{stem}-canvas.png').convert('RGB')
+    scale=box['w']/native.width
+    assert abs(box['h']/native.height-scale)<.001
+    pixels=im.load(); reference=native.load()
+    checked=bad=0
+    for y in range(max(0,int(box['y'])+2),min(im.height,int(box['y']+box['h'])-2),2):
+        for x in range(max(0,int(box['x'])+2),min(im.width,int(box['x']+box['w'])-2),2):
+            if any(x>=b['x']-3 and x<b['x']+b['w']+3 and y>=b['y']-3 and y<b['y']+b['h']+9 for b in masks):
                 continue
-            checked += 1
-            color = pixels[x, y]
-            if any(pixels[x+dx, y+dy] != color for dy in range(4) for dx in range(4)):
-                bad += 1
-    assert bad == 0, (name, bad)
-    assert checked > 110000, (name, checked)
-    print(f'PASS {name}: 1920x1080, {checked} crisp 4x4 source-pixel blocks')
+            sx=int((x+.5-box['x'])/scale);sy=int((y+.5-box['y'])/scale)
+            if any(sx>=b['x'] and sx<b['x']+b['w'] and sy>=b['y'] and sy<b['y']+b['h'] for b in box['moving']):
+                continue
+            color=pixels[x,y]
+            checked+=1
+            if not any(reference[min(native.width-1,max(0,sx+dx)),min(native.height-1,max(0,sy+dy))]==color
+                       for dy in (-1,0,1) for dx in (-1,0,1)):
+                bad+=1
+    assert checked>im.width*im.height*.12,(name,checked)
+    assert bad==0,(name,bad,checked)
+    print(f'PASS {name}: {im.width}x{im.height}, {checked} unsmoothed samples at proportional scale {scale:.4f}')
