@@ -21,3 +21,5 @@ run-task*.cmd
 _chk.py
 ui-complaint.png
 preview/attic-bg-1.png
+
+preview/*-out.txt
