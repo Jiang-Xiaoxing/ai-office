@@ -89,26 +89,44 @@
   function roomLayout() {
     const point=p=>({x:p.x/4,y:p.y/4});
     const box=r=>({x:r.x/4,y:r.y/4,w:r.width/4,h:r.height/4});
+    const furniture=id=>box(roomSpec.navigation.obstacleRects.find(o=>o.id===id).rect);
+    const sofa=point(roomSpec.sofa.sprite.groundAnchor),tea=box(roomSpec.teaTable.clickRect);
+    const chair=furniture('c-obstacle-reading-chair'),sideTable=furniture('c-obstacle-reading-side-table');
+    const bookcase=furniture('c-obstacle-right-wall-bookcase');
+    const leftShelf=furniture('c-obstacle-left-bookcase'),rightShelf=furniture('c-obstacle-right-bookcase-divider');
     const slots=roomSpec.workstations.map((d,slot)=>({slot,stationId:d.id,
       seat:point(d.sprite.groundAnchor),approach:point(d.approachPoint),topLeft:point(d.sprite.topLeft),
       screen:{x:d.deskRect.x/4+12,y:d.deskRect.y/4-9,w:20,h:9},clickRect:box(d.clickRect)}));
     return {...ROOM,desks:actors.map(a=>({...slots[a.slot],id:a.id})),
       protected:roomSpec.navigation.obstacleRects.map(o=>box(o.rect)),
-      blocks:roomSpec.navigation.obstacleRects.map(o=>({...box(o.rect),station:o.disabledWhenOccupying})),
+      blocks:roomSpec.navigation.obstacleRects.map(o=>({...box(o.rect),id:o.id,station:o.disabledWhenOccupying})),
       walkable:roomSpec.navigation.walkableRects.map(box),
-      spots:[{x:56,y:182,action:'sleep'},{x:188,y:184,action:'tea'},
-        {x:244,y:184,action:'read'},{x:356,y:184,action:'sleep'},
-        {x:300,y:184,action:'read'},{x:412,y:184,action:'tea'}]};
+      // Anchors use bg-c furniture coordinates and the supplied sofa sprite
+      // anchor (feet, not cushion). Sofa access belongs to its occupants and
+      // the leftmost workstation, whose neighbouring chair can close its bay.
+      spots:[{...sofa,x:roomSpec.sofa.seatPoints[2].x/4,action:'sleep',furniture:'c-obstacle-sofa'},
+        {x:tea.x+19,y:tea.y+tea.h+6,action:'tea'},
+        {x:chair.x+chair.w/2,y:chair.y-3,action:'read'},
+        {x:sideTable.x+sideTable.w/2,y:sideTable.y+sideTable.h+4,action:'tea'},
+        {x:bookcase.x+2,y:bookcase.y+bookcase.h+21,action:'read'},
+        {x:tea.x-13,y:tea.y+15,action:'read'},
+        {...sofa,x:roomSpec.sofa.seatPoints[0].x/4,action:'read',furniture:'c-obstacle-sofa'},
+        {x:tea.x+tea.w+7,y:tea.y+tea.h+4,action:'tea'},
+        {x:leftShelf.x+leftShelf.w/2,y:leftShelf.y+leftShelf.h+37,action:'read'},
+        {x:rightShelf.x+rightShelf.w/2,y:rightShelf.y+rightShelf.h+37,action:'read'},
+        {x:bookcase.x-14,y:bookcase.y+16,action:'read'}]};
   }
-  // The left chair and bookcase form a narrow bay. Its resident rests on its
-  // own side of that passage; others must not enter and get trapped behind a
-  // working neighbour. Actions still change in place when all nooks are taken.
-  const leisureSpots=a=>layout.spots.map((p,i)=>({p,i})).filter(({i})=>a.slot===0?i===0:i!==0);
+  // Every nook is open to everybody. A resident used to be pinned to one spot
+  // so that a neighbour could never wall it in, but that same pin left the
+  // pinned one unable to step aside: whoever it blocked was stuck until their
+  // own timer happened to fire. Nooks now rotate freely and the nook nearest a
+  // colleague's blocked path yields on request (see makeWay).
+  const leisureSpots=a=>layout.spots.map((p,i)=>({p,i}));
   function isFallbackTool(t) {return FALLBACK_TOOL.test(`${t.id} ${t.name||''}`);}
-  function roomTools() {
-    // Idle catch-alls stay in the footer only, so they never hold a person slot.
-    return tools.filter(t=>t.status==='working'||!isFallbackTool(t)).slice(0,CAPACITY);
-  }
+  // A resting catch-all is not a resident: it belongs neither to the room nor
+  // to the status bar until its session really works.
+  const isVisibleTool=t=>t.status==='working'||!isFallbackTool(t);
+  function roomTools() {return tools.filter(isVisibleTool).slice(0,CAPACITY);}
   function syncTools(incoming) {
     tools=incoming.map(t=>({...t}));
     const visible=roomTools(),used=new Set();
@@ -134,7 +152,7 @@
       }));
       actors.signature=signature;layout={...layout,...roomLayout()};
       for(const a of actors)if(a.requested===null) {
-        const available=leisureSpots(a).filter(({p})=>!personCollision(p.x,p.y,a));
+        const available=leisureSpots(a).filter(({p})=>!personCollision(p.x,p.y,a,false,true));
         const spawn=available.find(({i})=>i===a.idleSlot)||available[0]||
           {p:nearestFree(layout.desks[a.index].seat,a,true),i:a.idleSlot};
         if(!spawn.p)throw new Error('No free resident position');
@@ -142,7 +160,7 @@
       }
       createLabels();
     }
-    const excess=tools.filter(t=>!visible.includes(t)).map(t=>t.id).join(',');
+    const excess=tools.filter(isVisibleTool).slice(CAPACITY).map(t=>t.id).join(',');
     if(excess&&excess!==overflowNotice)console.warn(`暖灯小阁最多显示 ${CAPACITY} 人；其余工具仅在底栏显示：${excess}`);
     overflowNotice=excess;
   }
@@ -150,17 +168,24 @@
     x=Math.round(x*1e6)/1e6;y=Math.round(y*1e6)/1e6;
     if(!layout.walkable.some(r=>x>=r.x+7&&x<=r.x+r.w-7&&y>=r.y+3&&y<=r.y+r.h-3))return false;
     return !layout.blocks.some(b=>!(actor&&b.station===layout.desks[actor.index]?.stationId)&&
+      !(actor&&b.id==='c-obstacle-sofa'&&
+        (actor.slot===0||(actor.requested==='idle'&&layout.spots[actor.idleSlot]?.furniture===b.id)||
+          (actor.x>=b.x-7&&actor.x<=b.x+b.w+7&&actor.y>=b.y-3&&actor.y<=b.y+b.h+3)))&&
       x>b.x-7&&x<b.x+b.w+7&&y>b.y-3&&y<b.y+b.h+3);
   }
-  function personCollision(x,y,a) {
+  // A resident that is settled on its nook stays there until its own timer
+  // fires; one that is mid-walk or already waiting is on its way out.
+  const atRest=a=>a.requested==='idle'&&!a.route.length&&!a.pending;
+  function personCollision(x,y,a,ignoreResting,standingRoom=false) {
     const look=residents[a.slot],b=look.walkBounds;
     const ax=Math.round(x)-32,ay=Math.round(y)-59;
     const p={x:ax+b.left,y:ay+b.top,w:b.right-b.left,h:b.bottom-b.top};
     return actors.some(other=>{
       if(other===a)return false;
-      const q=bodyBox(other);if(!overlaps(p,q,1))return false;
+      if(ignoreResting&&atRest(other))return false;
+      const q=standingRoom?bodyBox({...other,mode:'walk'}):bodyBox(other);if(!overlaps(p,q,1))return false;
       const bx=Math.round(other.x)-32,by=Math.round(other.y)-59,otherLook=residents[other.slot];
-      const mask=other.mode==='walk'?otherLook.walkMask:otherLook.actionMasks[animationName(other)];
+      const mask=standingRoom||other.mode==='walk'?otherLook.walkMask:otherLook.actionMasks[animationName(other)];
       // Transparent corners of the supplied 64px frames are free space. A
       // union across animation frames keeps clearance stable as limbs move.
       for(let py=Math.max(p.y,q.y-1);py<Math.min(p.y+p.h,q.y+q.h+1);py++)
@@ -174,17 +199,18 @@
       return false;
     });
   }
-  function nearestFree(point,actor,avoidPeople=false) {
+  function nearestFree(point,actor,avoidPeople=false,ignoreResting=false) {
     const gx=Math.round(point.x/4),gy=Math.round(point.y/4);
     for(let r=0;r<22;r++)for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++) {
       if(Math.abs(dx)!==r&&Math.abs(dy)!==r)continue;
       const x=(gx+dx)*4,y=(gy+dy)*4;
-      if(walkable(x,y,actor)&&(!avoidPeople||!personCollision(x,y,actor)))return {x,y};
+      if(walkable(x,y,actor)&&(!avoidPeople||!personCollision(x,y,actor,ignoreResting)))return {x,y};
     }
     return null;
   }
-  function routeBetween(start,target,actor) {
-    const s=nearestFree(start,actor,true),end=nearestFree(target,actor);
+  function routeBetween(start,target,actor,ignoreResting=false) {
+    if(Math.hypot(start.x-target.x,start.y-target.y)<.1)return [];
+    const s=nearestFree(start,actor,true,ignoreResting),end=nearestFree(target,actor,false,ignoreResting);
     if(!s||!end||!walkable(target.x,target.y,actor))return [];
     const key=p=>`${p.x},${p.y}`,queue=[s],seen=new Map([[key(s),null]]);
     let found=false;
@@ -194,7 +220,7 @@
         Math.abs(p.x+a[0]-end.x)+Math.abs(p.y+a[1]-end.y)-Math.abs(p.x+b[0]-end.x)-Math.abs(p.y+b[1]-end.y));
       for(const [dx,dy] of options) {
         const n={x:p.x+dx,y:p.y+dy},k=key(n);
-        if(!seen.has(k)&&walkable(n.x,n.y,actor)&&!personCollision(n.x,n.y,actor)){seen.set(k,p);queue.push(n);}
+        if(!seen.has(k)&&walkable(n.x,n.y,actor)&&!personCollision(n.x,n.y,actor,ignoreResting)){seen.set(k,p);queue.push(n);}
       }
     }
     if(!found)return [];
@@ -207,30 +233,83 @@
   function destination(a) {
     return a.requested==='working'?layout.desks[a.index].seat:layout.spots[a.idleSlot];
   }
+  // Path (densified to walking size) a blocked resident has asked to cross, the
+  // seat it is trying to reach, and the moment that request expires. Idlers
+  // consult it to step out of the way.
+  let passage=null,passageFor='',passageUntil=0;
+  function pathCells(path) {
+    const cells=[];
+    for(let i=0;i<path.length-1;i++) {
+      const p=path[i],q=path[i+1],n=Math.max(1,Math.ceil(Math.hypot(q.x-p.x,q.y-p.y)/4));
+      for(let k=0;k<=n;k++)cells.push({x:p.x+(q.x-p.x)*k/n,y:p.y+(q.y-p.y)*k/n});
+    }
+    return cells.length?cells:[path[0]].filter(Boolean);
+  }
+  // Nobody is really trapped while their colleagues can simply stand up: if the
+  // only thing between a walker and its seat is a resident settled on a nook,
+  // ask that resident to move on. It walks to a nook off this path, and the
+  // walker retries at once. Without this a cornered idler could freeze a
+  // worker's whole afternoon, which is exactly what used to happen.
+  function makeWay(a,target) {
+    const seat=`${target.x},${target.y}`;
+    if(clock<passageUntil&&passageFor===seat)return false;
+    const loose=routeBetween(a,target,a,true);
+    if(!loose.length)return false;
+    const cells=pathCells(loose);
+    const blockers=actors.filter(b=>b!==a&&atRest(b)&&
+      cells.some(c=>Math.abs(c.x-b.x)<30&&Math.abs(c.y-b.y)<50));
+    if(!blockers.length)return false;
+    blockers.forEach(b=>{b.yield=true;b.idleTime=0;});
+    passage=cells;passageFor=seat;passageUntil=clock+5;
+    return true;
+  }
   function go(a,target,arrival) {
     a.pending=null;a.route=routeBetween(a,target,a);a.arrival=arrival;a.waitTime=0;
     // A rest point must not fence another resident into a bay. If its route
     // is occupied, reserve a reachable free nook rather than waiting forever.
     if(!a.route.length&&a.requested==='idle'&&Math.hypot(a.x-target.x,a.y-target.y)>.1) {
       const reserved=new Set(actors.filter(b=>b!==a&&b.requested==='idle').map(b=>b.idleSlot));
-      const choices=leisureSpots(a).filter(({i})=>!reserved.has(i))
+      const choices=leisureSpots(a).filter(({p,i})=>!reserved.has(i)&&!personCollision(p.x,p.y,a,false,true))
         .sort((b,c)=>Math.hypot(a.x-b.p.x,a.y-b.p.y)-Math.hypot(a.x-c.p.x,a.y-c.p.y));
       for(const {p,i} of choices) {
+        const previousSlot=a.idleSlot;a.idleSlot=i;
         const route=routeBetween(a,p,a);
-        if(route.length){a.idleSlot=i;a.route=route;a.arrival=p.action;target=p;break;}
+        if(route.length){a.route=route;a.arrival=p.action;target=p;break;}
+        a.idleSlot=previousSlot;
+      }
+      if(!a.route.length) {
+        const current=leisureSpots(a).find(({p,i})=>!reserved.has(i)&&Math.hypot(a.x-p.x,a.y-p.y)<.1);
+        if(current){a.idleSlot=current.i;a.arrival=current.p.action;target=current.p;}
       }
     }
     if(a.route.length)a.mode='walk';
-    else if(Math.hypot(a.x-target.x,a.y-target.y)<.1)a.mode=arrival;
-    else{a.mode='idle';a.pending={...target};a.retryTime=1;}
+    else if(Math.hypot(a.x-target.x,a.y-target.y)<.1)a.mode=a.arrival;
+    // Anyone whose way is blocked by resting colleagues first asks them to move,
+    // then waits for the passage to clear.
+    else if(makeWay(a,target)){a.pending={...target};a.retryTime=.5;}
+    // A seat that is momentarily walled in must not freeze its resident in a
+    // blank stand: keep the activity it is already doing and retry the walk.
+    else{if(!(a.requested==='idle'&&['sleep','tea','read'].includes(a.mode)))a.mode='idle';
+      a.pending={...target};a.retryTime=1;}
   }
   function chooseLeisure(a) {
     const taken=new Set(actors.filter(other=>other!==a&&other.requested==='idle').map(other=>other.idleSlot));
-    const choices=leisureSpots(a).filter(({p,i})=>!taken.has(i)&&p.action!==layout.spots[a.idleSlot].action&&walkable(p.x,p.y)&&
+    // Standing up for a colleague is pointless in the same nook: a yielding
+    // resident prefers any free nook clear of the path that colleague needs,
+    // even one offering the activity it is already doing.
+    const avoid=a.yield?passage:null;
+    a.yield=false;
+    const free=leisureSpots(a).filter(({p,i})=>!taken.has(i)&&i!==a.idleSlot&&walkable(p.x,p.y,{requested:'idle',idleSlot:i})&&
+      !personCollision(p.x,p.y,a,false,true)&&
       !actors.some(other=>other!==a&&other.requested==='idle'&&
-        Math.abs(p.x-layout.spots[other.idleSlot].x)<28&&Math.abs(p.y-layout.spots[other.idleSlot].y)<38));
-    if(!choices.length){a.mode=['sleep','tea','read'].find(mode=>mode!==a.mode);a.idleChanges++;a.idleTime=12+Math.random()*10;return;}
-    a.idleSlot=choices[Math.floor(Math.random()*choices.length)].i;a.idleChanges++;
+        Math.abs(p.x-layout.spots[other.idleSlot].x)<36&&Math.abs(p.y-layout.spots[other.idleSlot].y)<56));
+    const clear=avoid?free.filter(({i})=>!avoid.some(c=>
+      Math.hypot(c.x-layout.spots[i].x,c.y-layout.spots[i].y)<34)):[];
+    const pool=clear.length?clear:free.filter(({p})=>p.action!==layout.spots[a.idleSlot].action);
+    // With no reachable spare nook, keep this furniture's activity. Switching
+    // only the animation could turn a tea-table visit into a nap in a chair.
+    if(!pool.length){a.idleChanges++;a.idleTime=12+Math.random()*10;return;}
+    a.idleSlot=pool[Math.floor(Math.random()*pool.length)].i;a.idleChanges++;
     go(a,destination(a),destination(a).action);
   }
   function fit() {
@@ -261,7 +340,14 @@
     // A single moving reservation prevents head-on deadlocks in the narrow
     // bays. Other residents keep their seats until the passage is clear.
     const priority=a=>a.requested==='idle'?[2,3,1,4,0,5].indexOf(a.slot):10+a.x;
-    const mover=actors.filter(a=>a.route.length).sort((a,b)=>priority(a)-priority(b))[0];
+    const walkers=actors.filter(a=>a.route.length).sort((a,b)=>priority(a)-priority(b));
+    const canStep=a=>{
+      const p=a.route.find(p=>Math.hypot(p.x-a.x,p.y-a.y)>.01);if(!p)return true;
+      const distance=Math.hypot(p.x-a.x,p.y-a.y),step=Math.min(dt*48,distance)/distance;
+      return !personCollision(a.x+(p.x-a.x)*step,a.y+(p.y-a.y)*step,a);
+    };
+    const active=walkers.find(a=>a.id===activeWalker);
+    const mover=active&&canStep(active)?active:walkers.find(canStep)||walkers[0];
     for(const a of actors) {
       if(a.pending){a.retryTime-=dt;if(a.retryTime<=0)go(a,a.pending,a.arrival);}
       else if(a.route.length) {
@@ -283,7 +369,11 @@
         }
         if(!a.route.length){activeWalker=null;a.mode=a.arrival;a.dir=a.mode==='type'?3:0;a.idleTime=12+Math.random()*10;}
       } else if(a.requested==='idle') {
-        a.idleTime-=dt;if(a.idleTime<=0)chooseLeisure(a);
+        // Let the current arrivals finish before starting another casual lap.
+        // Explicit requests to clear a colleague's path still take priority.
+        if(a.yield||!actors.some(other=>other.route.length||other.pending)) {
+          a.idleTime-=dt;if(a.idleTime<=0)chooseLeisure(a);
+        }
       }
       a.frame=a.mode==='walk'?Math.floor(a.distance/4)%4:Math.floor((clock+a.phase)*metadata.animations[animationName(a)].fps)%metadata.animations[animationName(a)].frames.length;
     }
@@ -430,17 +520,21 @@
   }
   function updateRoster() {
     const roster=document.getElementById('roster'),scroll=roster.scrollLeft;roster.replaceChildren();
-    roster.classList.toggle('many-tools',tools.length>3);
-    for(const [i,t] of tools.entries()) {
+    // The status bar lists exactly the tools the room would show, plus every
+    // overflow tool; resting catch-alls are left out of both.
+    const visible=tools.filter(isVisibleTool);
+    roster.classList.toggle('many-tools',visible.length>3);
+    for(const [i,t] of visible.entries()) {
       const a=actors.find(a=>a.id===t.id),color=a?.color||COLORS[i%COLORS.length];
       const el=document.createElement('span');el.className='agent-status';
       const dot=document.createElement('i'),name=document.createElement('span'),state=document.createElement('em');
       el.style.setProperty('--agent-color',color);el.style.setProperty('--status-color',t.status==='working'?'#b9d59c':'#edc57e');
       name.textContent=displayName(t);state.textContent=t.status==='working'?'干活中':'摸鱼中';
+      el.title=`${displayName(t)}：${state.textContent}`;
       el.append(dot,name,state);roster.append(el);
     }
     roster.scrollLeft=scroll;
-    canvas.setAttribute('aria-label',`${weather?.snapshot().name||''}阁楼；`+tools.map(t=>`${displayName(t)}：${t.status==='working'?'干活中':'摸鱼中'}`).join('；'));
+    canvas.setAttribute('aria-label',`${weather?.snapshot().name||''}阁楼；`+visible.map(t=>`${displayName(t)}：${t.status==='working'?'干活中':'摸鱼中'}`).join('；'));
   }
   async function poll() {
     if(polling||disposed)return;polling=true;
@@ -484,7 +578,7 @@
         monitorOn:a.mode==='type'&&a.requested==='working'})),
       obstacles:layout?.blocks.map(b=>({...b})),stations:layout?.desks.map(d=>({...d})),
       protected:layout?.protected.map(b=>({...b})),
-      spots:layout?.spots.map(p=>({...p,walkable:walkable(p.x,p.y)})),
+      spots:layout?.spots.map((p,idleSlot)=>({...p,walkable:walkable(p.x,p.y,{requested:'idle',idleSlot})})),
     }),
   }),writable:false});
   function suspend() {cancelAnimationFrame(animation);animation=0;clearInterval(pollTimer);pollTimer=0;lastTime=0;}

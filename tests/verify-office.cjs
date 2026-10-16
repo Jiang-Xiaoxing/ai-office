@@ -7,65 +7,12 @@ const {execFileSync}=require('node:child_process');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'D:/tools/PixelAgents/node_modules/playwright');
 const ROOT=path.resolve(__dirname,'..'),TMP=path.join(ROOT,'.browser-tmp');
 fs.mkdirSync(TMP,{recursive:true});
-const read=p=>p.evaluate(()=>window.officeDebug.snapshot());
+const {read,arrive,checkFit,ids,names}=require('./office-lib.cjs');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const ids=['codex','openrouter','claude-code'];
-const names=['Codex','Claude Code (OpenRouter)','Claude Code (DeepSeek)'];
 const providerScenarios=JSON.parse(execFileSync(PYTHON,
   [path.join(__dirname,'provider_scenarios.py')],{cwd:ROOT,windowsHide:true,encoding:'utf8'}));
-const settled=(s,work)=>s.actors.every(a=>a.requested===(work?'working':'idle')&&!a.route.length&&
+const settled=(s,work)=>s.actors.every(a=>a.requested===(work?'working':'idle')&&!a.route.length&&!a.pending&&
   (work?a.mode==='type':['sleep','tea','read'].includes(a.mode)));
-async function arrive(page,work) {
-  await page.waitForFunction(work=>{
-    const s=window.officeDebug?.snapshot();return s?.connected&&s.actors.length===3&&s.actors.every(a=>a.requested===(work?'working':'idle')&&!a.route.length&&
-      (work?a.mode==='type':['sleep','tea','read'].includes(a.mode)));
-  },work,{timeout:45000});
-}
-async function checkFit(page) {
-  const s=await read(page),box=await page.locator('#game').boundingBox(),room=await page.locator('#wrap').boundingBox();
-  assert(s.zoom>0);assert.equal(s.smoothing,false);
-  assert(box.x>=room.x-.01&&box.x+box.width<=room.x+room.width+.01,'side workstations stay visible');
-  assert.equal(await page.locator('#wrap').evaluate(e=>getComputedStyle(e).overflow),'hidden','only decorative edges are clipped by the room');
-  assert(Math.abs(box.width/box.height-480/270)<.001,'room retains its aspect ratio');
-  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth||document.documentElement.scrollHeight>innerHeight),false);
-  const bars=await page.locator('#bar,#footer').evaluateAll(els=>els.map(el=>{
-    const b=el.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};
-  }));
-  const overlaps=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
-  const text=await page.locator('h1,.owner,#weather,#connection,#ts,.agent-status,.agent-status em,.local,.refresh').evaluateAll(els=>els.filter(el=>el.getClientRects().length).map(el=>{
-    const b=el.getBoundingClientRect();return {size:parseFloat(getComputedStyle(el).fontSize),x:b.x,y:b.y,w:b.width,h:b.height};
-  }));
-  for(const t of text) {
-    assert(t.size>=18,`bar text stays readable: ${t.size}px`);
-    assert(t.w>0&&t.h>0&&t.x>=0&&t.y>=0&&t.x+t.w<=page.viewportSize().width+.01&&t.y+t.h<=page.viewportSize().height+.01,'bar text stays visible');
-  }
-  if(page.viewportSize().width===1920&&page.viewportSize().height===1080) {
-    assert.equal(s.sample,1);assert.equal(s.pixelScale,4);
-    assert(Math.abs(box.width-room.width)<.1&&box.y<=room.y&&box.y+box.height>=room.y+room.height,'room fills both dimensions between bars');
-    assert.equal(room.y,56);assert.equal(room.height,976);
-    assert.equal(await page.locator('h1').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),28);
-    assert.equal(bars[0].h,56,'desktop timber header');assert.equal(bars[1].h,48,'readable status tags');
-  }
-  for(const a of s.actors)assert(a.walkable,`${a.id} blocked ${a.x},${a.y}`);
-  for(const p of s.spots)assert(p.walkable,`leisure destination blocked ${p.x},${p.y}`);
-  // Resting rooms carry no billboard: a plate only exists while it is hovered
-  // or pinned, so nothing here may sit over the art or the residents.
-  const plates=await page.locator('.nameplate:not([hidden])').evaluateAll(els=>els.map(e=>{const b=e.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height};}));
-  assert.deepEqual(plates,[],'no nameplate is drawn until a resident is hovered or pinned');
-  for(const a of s.actors) {
-    const q={x:box.x+a.body.x*s.pixelScale,y:box.y+a.body.y*s.pixelScale,
-      w:a.body.w*s.pixelScale,h:a.body.h*s.pixelScale};
-    assert(bars.every(b=>!overlaps(q,b)),'bars must not cover residents');
-  }
-  for(const d of s.stations) {
-    const screen={x:box.x+d.screen.x*s.pixelScale,y:box.y+d.screen.y*s.pixelScale,w:d.screen.w*s.pixelScale,h:d.screen.h*s.pixelScale};
-    assert(bars.every(b=>!overlaps(screen,b)),'bars must not cover workstations');
-  }
-  if(page.viewportSize().width===1920) {
-    const fonts=await page.locator('.nameplate strong,.nameplate small,.nameplate span').evaluateAll(els=>els.map(e=>parseFloat(getComputedStyle(e).fontSize)));
-    assert(fonts.every(size=>size>=16),`readable name/subtitle/status: ${fonts}`);
-  }
-}
 async function checkBackground(page) {
   const result=await page.evaluate(async()=>{
     const s=window.officeDebug.snapshot(),game=document.getElementById('game');
@@ -198,13 +145,6 @@ async function watchTravel(page,work) {
     assert.equal((await read(page)).actors[0].requested,'working');assert(await page.locator('#notice').isVisible());
     failing=false;await page.waitForFunction(()=>window.officeDebug.snapshot().connected);
     console.log('PASS mixed activity, disconnected state preservation and automatic recovery');
-    for(const size of [{width:390,height:844},{width:320,height:740},{width:768,height:1024},{width:1366,height:768}]) {
-      mode='idle';await page.setViewportSize(size);await arrive(page,false);await checkFit(page);
-      if(size.width===390)await page.screenshot({path:path.join(TMP,'mobile-idle.png')});
-      mode='working';await arrive(page,true);await checkFit(page);
-      if(size.width===390)await page.screenshot({path:path.join(TMP,'mobile-work.png')});
-      console.log(`PASS ${size.width}x${size.height}: fit, labels, all three idle/work destinations`);
-    }
     mode='working';const startup=await context.newPage();
     await startup.goto(`${BASE}/`);
     await startup.waitForFunction(()=>window.officeDebug?.snapshot().actors.length===3&&window.officeDebug.snapshot().actors.every(a=>a.requested==='working'));

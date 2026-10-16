@@ -137,5 +137,27 @@ async function geometry(page) {
       assert.deepEqual(errors,[]);
       await context.close();console.log('PASS '+name+': timber HUD, head anchors, 8px gaps, pixel focus, scenery actions and movement');
     }
+    // The real four-tool roster used to clip the last Claude Code tag through
+    // a letter at 1024px. Every tag and state must fit; names alone may ellipsize.
+    const context=await browser.newContext({viewport:{width:1024,height:600}});
+    await context.route('**/api/status',r=>r.fulfill({json:{ts:1792026000,agents:[
+      ['codex','Codex'],['openrouter','Claude Code (OpenRouter)'],
+      ['claude-code','Claude Code (DeepSeek)'],['claude-code-other','Claude Code']
+    ].map(([id,name])=>({id,name,status:'working'}))}}));
+    const page=await context.newPage();await page.goto(BASE+'/');
+    await page.waitForFunction(()=>document.querySelectorAll('.agent-status').length===4);
+    const tags=await page.locator('#roster').evaluate(roster=>{
+      const bounds=roster.getBoundingClientRect();
+      return [...roster.children].map(tag=>{
+        const r=tag.getBoundingClientRect(),name=tag.querySelector('span'),state=tag.querySelector('em');
+        const style=getComputedStyle(name),s=state.getBoundingClientRect();
+        return {fits:r.left>=bounds.left&&r.right<=bounds.right+.1,stateFits:s.left>=r.left&&s.right<=r.right,
+          ellipsis:style.textOverflow==='ellipsis'&&style.overflow==='hidden',
+          fullName:tag.title.includes(name.textContent)};
+      });
+    });
+    assert(tags.every(t=>t.fits&&t.stateFits&&t.ellipsis&&t.fullName),'all four tags fit, with intact states and accessible full names');
+    assert(await page.locator('#roster').evaluate(r=>r.scrollWidth<=r.clientWidth),'four real tools need no clipped overflow');
+    await context.close();console.log('PASS 1024x600 four-tool footer: bounded tags, name ellipsis, intact states');
   } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

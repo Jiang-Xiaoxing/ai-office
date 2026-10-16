@@ -8,6 +8,9 @@ fs.mkdirSync(TMP,{recursive:true});
 const listen=server=>new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',()=>resolve(server.address().port));});
 const close=server=>new Promise(resolve=>server.close(resolve));
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
+function report(message) {
+  console.log(message);fs.appendFileSync(path.join(TMP,'acceptance.log'),message+'\n');
+}
 async function terminate(child) {
   if(!child.pid||child.exitCode!==null)return;
   if(process.platform!=='win32'){child.kill();return;}
@@ -20,7 +23,8 @@ async function terminate(child) {
   });
 }
 async function run(command,args,env) {
-  console.log(`RUN ${args.join(' ')}`);
+  report(`RUN ${args.join(' ')}`);
+  const started=performance.now();
   await new Promise((resolve,reject)=>{
     const child=spawn(command,args,{cwd:ROOT,env,windowsHide:true,stdio:['ignore','pipe','pipe']});
     child.stdout.on('data',data=>{process.stdout.write(data);fs.appendFileSync(path.join(TMP,'acceptance.log'),data);});
@@ -29,6 +33,7 @@ async function run(command,args,env) {
     child.once('error',e=>{clearTimeout(timer);reject(e);});
     child.once('exit',code=>{clearTimeout(timer);code===0?resolve():reject(Error(`${args[0]} exited ${code}`));});
   });
+  report(`PASS ${args[0]} completed in ${((performance.now()-started)/1000).toFixed(1)}s`);
 }
 (async()=>{
   const lifecycleOnly=process.argv.includes('--lifecycle-only');
@@ -73,7 +78,7 @@ async function run(command,args,env) {
     await run(PYTHON,['tests/test_server.py'],env);
     await run(process.env.OFFICE_ART_PYTHON||'D:/AITools/py312/python.exe',['tests/verify_icon.py'],env);
     await run(process.env.OFFICE_ART_PYTHON||'D:/AITools/py312/python.exe',['tests/verify-assets.py'],env);
-    for(const name of ['weather-clock','verify-office','verify-labels','verify-weather','verify-dynamic','verify-site','verify-interactions','verify-zones','verify-ui','verify-fill','verify-collisions','verify-lifecycle'])
+    for(const name of ['weather-clock','verify-office','verify-office-responsive','verify-labels','verify-weather','verify-dynamic','verify-dynamic-tools','verify-site','verify-interactions','verify-zones','verify-ui','verify-fill','verify-collisions','verify-lifecycle'])
       await run(process.execPath,[`tests/${name}.cjs`],env);
     await run(PYTHON,['tests/verify-memory.py'],env);
     await run(PYTHON,['tests/verify_screenshots.py'],env);

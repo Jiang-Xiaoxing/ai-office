@@ -30,8 +30,11 @@ async function assertPlates(page,expected) {
     plates.slice(i+1).forEach(q=>assert(!overlap(p,q),'plates never overlap'));
     const body=bodies.find(b=>b.id===p.id);
     assert(p.y+p.h<=body.head+2,'plate sits above its own head: '+JSON.stringify({p,body}));
-    if(p.x>room.x&&p.x+p.w<room.x+room.w)
+    // Decide from the centred position, not the already-clamped DOM box:
+    // offsetWidth rounds 116.765625px to 117px at the 390px room edge.
+    if(body.cx-p.w/2>=room.x+1&&body.cx+p.w/2<=room.x+room.w-1)
       assert(Math.abs(p.x+p.w/2-body.cx)<=s.pixelScale+1,'plate centres over its resident');
+    else assert(body.cx>=p.x&&body.cx<=p.x+p.w,'edge-clamped plate still points at its resident');
   });
   return plates;
 }

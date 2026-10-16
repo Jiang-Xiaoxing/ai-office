@@ -267,7 +267,10 @@ h1 {
 }
 .agent-status {
   display:inline-flex;
-  flex-shrink:0;
+  /* Tags give way before the row is clipped through a glyph, but never below a
+     readable stub: past it the bar keeps scrolling instead of squeezing. */
+  flex:0 1 auto;
+  min-width:132px;
   align-items:center;
   gap:8px;
   padding:0 10px;
@@ -278,6 +281,12 @@ h1 {
   line-height:28px;
   white-space:nowrap;
 }
+.agent-status span {
+  /* Only the tool name may give way, and it ends on an ellipsis when it does. */
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
 .agent-status i {
   width:8px;
   height:8px;
@@ -286,6 +295,7 @@ h1 {
   box-shadow:0 2px #1d222355;
 }
 .agent-status em {
+  flex:none;
   font-size:18px;
   font-style:normal;
   color:#e9cba4;

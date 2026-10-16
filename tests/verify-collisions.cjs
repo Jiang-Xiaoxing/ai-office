@@ -37,13 +37,20 @@ const TMP=path.resolve(__dirname,'../.browser-tmp');
      for(let y=Math.max(ay,by);y<Math.min(ay+64,by+64);y++)for(let x=Math.max(ax,bx);x<Math.min(ax+64,bx+64);x++)
       if(opaque(a,x-ax,y-ay)&&opaque(b,x-bx,y-by))hits.push([a.id,b.id,x,y]);
     }
-    return {actors:s.actors,hits,time:performance.now()};
+    return {actors:s.actors,spots:s.spots,hits,time:performance.now()};
    });
    assert.deepEqual(sample.hits,[],'visible character pixels never overlap');
    sample.actors.forEach((actor,j)=>{
     if(previous)assert(Math.hypot(actor.x-previous.actors[j].x,actor.y-previous.actors[j].y)<=(sample.time-previous.time)/1000*48+3,'no teleport to escape the passage');
     if(actor.mode==='walk')walking++;
-    if(actor.slot!==0&&actor.requested==='idle')assert(actor.x>140,'other residents cannot get trapped in the left bay');
+    // Resting happens on the lounge furniture only: a settled idler sits exactly
+    // on one declared nook and never parks in the central walkway or the stair
+    // mouth, which stay clear no matter how the seats fill up.
+    if(actor.requested==='idle'&&actor.mode!=='type'&&!actor.pending&&!actor.route.length) {
+     assert(sample.spots.some(p=>p.action===actor.mode&&Math.abs(p.x-actor.x)<.01&&Math.abs(p.y-actor.y)<.01),
+      `a resting resident sits on a declared nook, not on the floor: ${actor.id} at ${actor.x},${actor.y}`);
+     assert(!(actor.x>214&&actor.x<270),'the walkway and the stair mouth stay clear of resting residents');
+    }
    });
    previous=sample;
    if(sample.actors.every((a,j)=>a.requested===next[j]&&(next[j]==='working'?a.mode==='type':!a.pending&&!a.route.length))){arrived=true;break;}
